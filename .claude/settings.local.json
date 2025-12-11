@@ -3,7 +3,10 @@
     "allow": [
       "Bash(uv run:*)",
       "Bash(dir:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(python3:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(python demos/demo_table_render.py:*)"
     ]
   }
 }
