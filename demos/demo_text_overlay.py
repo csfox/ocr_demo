@@ -424,7 +424,8 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                 color=(0, 0, 0)
             )
             cstk = ""
-            cstk_x = cursor_x
+            # Note: cstk_x is NOT updated here - it will be set when starting a new buffer
+            # (at line 413 initially, and at wrap points like line 454)
 
     # Pre-calculate space width for efficiency
     space_width = fitz.get_text_length(' ', fontname=fontname, fontsize=fontsize)
@@ -433,6 +434,13 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
         if seg_type == 'text':
             # Process character by character
             for i, ch in enumerate(content):
+                # Handle newline character
+                if ch == '\n':
+                    flush_buffer()
+                    cursor_x = bbox.x0 + margin_x
+                    cursor_y += line_height
+                    cstk_x = cursor_x
+                    continue
                 # Calculate character width
                 if ch == ' ':
                     char_width = space_width
@@ -451,7 +459,6 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                     # Move to next line
                     cursor_x = bbox.x0 + margin_x
                     cursor_y += line_height
-                    cstk_x = cursor_x
 
                     # Check for overflow
                     if cursor_y > bbox.y1 - margin_y - fontsize * 0.3:
@@ -461,7 +468,8 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                     # Skip leading space on new line
                     if ch == ' ':
                         continue
-
+                if not cstk:
+                    cstk_x = cursor_x
                 # Add character to buffer
                 cstk += ch
                 cursor_x += char_width
@@ -626,7 +634,8 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
             bg_color_norm = tuple(c / 255 for c in bg_color)
 
             # Replace letters with 'c'
-            modified_text = replace_letters_preserve_formulas(text)
+            # modified_text = replace_letters_preserve_formulas(text) # TODO
+            modified_text = text
 
             # Draw background rectangle
             rect = fitz.Rect(bbox)

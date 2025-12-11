@@ -1,1 +1,126 @@
-{"page_index":0,"elements":[{"bbox":[347.0,274.0,1358.0,380.0],"category":"Title","text":"Visual Autoregressive Modeling: Scalable Image Generation via Next-Scale Prediction"},{"bbox":[374.0,451.0,1345.0,491.0],"category":"Text","text":"Keyu Tian¹,², Yi Jiang²,†, Zehuan Yuan²,*, Bingyue Peng², Liwei Wang¹,*"},{"bbox":[618.0,495.0,1087.0,530.0],"category":"Text","text":"¹Peking University      ²Bytedance Inc"},{"bbox":[383.0,539.0,1324.0,601.0],"category":"Text","text":"keyutian@stu.pku.edu.cn, jiangyi.enjoy@bytedance.com,\nyuanzehuan@bytedance.com, bingyue.peng@bytedance.com, wanglw@pku.edu.cn"},{"bbox":[445.0,618.0,1254.0,698.0],"category":"Text","text":"Try and explore our online demo at: https://var.vision\n\nCodes and models: https://github.com/FoundationVision/VAR"},{"bbox":[312.0,727.0,1394.0,1293.0],"category":"Picture","text":""},{"bbox":[296.0,1305.0,1410.0,1367.0],"category":"Caption","text":"Figure 1: Generated samples from Visual AutoRegressive (VAR) transformers trained on ImageNet. We show 512×512 samples (top), 256×256 samples (middle), and zero-shot image editing results (bottom)."},{"bbox":[787.0,1389.0,922.0,1424.0],"category":"Section-header","text":"Abstract"},{"bbox":[393.0,1443.0,1312.0,1997.0],"category":"Text","text":"We present Visual AutoRegressive modeling (VAR), a new generation paradigm that redefines the autoregressive learning on images as coarse-to-fine “next-scale prediction” or “next-resolution prediction”, diverging from the standard raster-scan “next-token prediction”. This simple, intuitive methodology allows autoregressive (AR) transformers to learn visual distributions fast and can generalize well: VAR, for the *first time*, makes GPT-style AR models surpass diffusion transformers in image generation. On ImageNet 256×256 benchmark, VAR significantly improve AR baseline by improving Fréchet inception distance (FID) from 18.65 to 1.73, inception score (IS) from 80.4 to 350.2, with 20× faster inference speed. It is also empirically verified that VAR outperforms the Diffusion Transformer (DiT) in multiple dimensions including image quality, inference speed, data efficiency, and scalability. Scaling up VAR models exhibits clear power-law scaling laws similar to those observed in LLMs, with linear correlation coefficients near -0.998 as solid evidence. VAR further showcases zero-shot generalization ability in downstream tasks including image in-painting, out-painting, and editing. These results suggest VAR has initially emulated the two important properties of LLMs: **Scaling Laws** and **zero-shot** generalization. We have released all models and codes to promote the exploration of AR/VAR models for visual generation and unified learning."},{"bbox":[329.0,2027.0,1277.0,2061.0],"category":"Footnote","text":"*Corresponding authors: wanglw@pku.edu.cn, yuanzehuan@bytedance.com; †: project lead"},{"bbox":[44.0,592.0,101.0,1568.0],"category":"Text","text":"arXiv:2404.02905v2 [cs.CV] 10 Jun 2024"},{"bbox":[297.0,2105.0,539.0,2135.0],"category":"Page-footer","text":"Preprint. Under review."}],"created_at":1765417906174}
+{
+    "page_index": 0,
+    "elements": [
+        {
+            "bbox": [
+                347.0,
+                274.0,
+                1358.0,
+                380.0
+            ],
+            "category": "Title",
+            "text": "Visual Autoregressive Modeling: Scalable Image Generation via Next-Scale Prediction"
+        },
+        {
+            "bbox": [
+                374.0,
+                451.0,
+                1345.0,
+                491.0
+            ],
+            "category": "Text",
+            "text": "Keyu Tian¹,², Yi Jiang²,†, Zehuan Yuan²,*, Bingyue Peng², Liwei Wang¹,*"
+        },
+        {
+            "bbox": [
+                618.0,
+                495.0,
+                1087.0,
+                530.0
+            ],
+            "category": "Text",
+            "text": "¹Peking University      ²Bytedance Inc"
+        },
+        {
+            "bbox": [
+                383.0,
+                539.0,
+                1324.0,
+                601.0
+            ],
+            "category": "Text",
+            "text": "keyutian@stu.pku.edu.cn, jiangyi.enjoy@bytedance.com,\nyuanzehuan@bytedance.com, bingyue.peng@bytedance.com, wanglw@pku.edu.cn"
+        },
+        {
+            "bbox": [
+                445.0,
+                618.0,
+                1254.0,
+                698.0
+            ],
+            "category": "Text",
+            "text": "Try and explore our online demo at: https://var.vision\n\nCodes and models: https://github.com/FoundationVision/VAR"
+        },
+        {
+            "bbox": [
+                312.0,
+                727.0,
+                1394.0,
+                1293.0
+            ],
+            "category": "Picture",
+            "text": ""
+        },
+        {
+            "bbox": [
+                296.0,
+                1305.0,
+                1410.0,
+                1367.0
+            ],
+            "category": "Caption",
+            "text": "Figure 1: Generated samples from Visual AutoRegressive (VAR) transformers trained on ImageNet. We show 512×512 samples (top), 256×256 samples (middle), and zero-shot image editing results (bottom)."
+        },
+        {
+            "bbox": [
+                787.0,
+                1389.0,
+                922.0,
+                1424.0
+            ],
+            "category": "Section-header",
+            "text": "Abstract"
+        },
+        {
+            "bbox": [
+                393.0,
+                1443.0,
+                1312.0,
+                1997.0
+            ],
+            "category": "Text",
+            "text": "We present Visual AutoRegressive modeling (VAR), a new generation paradigm that redefines the autoregressive learning on images as coarse-to-fine “next-scale prediction” or “next-resolution prediction”, diverging from the standard raster-scan “next-token prediction”. This simple, intuitive methodology allows autoregressive (AR) transformers to learn visual distributions fast and can generalize well: VAR, for the *first time*, makes GPT-style AR models surpass diffusion transformers in image generation. On ImageNet 256×256 benchmark, VAR significantly improve AR baseline by improving Fréchet inception distance (FID) from 18.65 to 1.73, inception score (IS) from 80.4 to 350.2, with 20× faster inference speed. It is also empirically verified that VAR outperforms the Diffusion Transformer (DiT) in multiple dimensions including image quality, inference speed, data efficiency, and scalability. Scaling up VAR models exhibits clear power-law scaling laws similar to those observed in LLMs, with linear correlation coefficients near -0.998 as solid evidence. VAR further showcases zero-shot generalization ability in downstream tasks including image in-painting, out-painting, and editing. These results suggest VAR has initially emulated the two important properties of LLMs: **Scaling Laws** and **zero-shot** generalization. We have released all models and codes to promote the exploration of AR/VAR models for visual generation and unified learning."
+        },
+        {
+            "bbox": [
+                329.0,
+                2027.0,
+                1277.0,
+                2061.0
+            ],
+            "category": "Footnote",
+            "text": "*Corresponding authors: wanglw@pku.edu.cn, yuanzehuan@bytedance.com; †: project lead"
+        },
+        {
+            "bbox": [
+                44.0,
+                592.0,
+                101.0,
+                1568.0
+            ],
+            "category": "Text",
+            "text": "arXiv:2404.02905v2 [cs.CV] 10 Jun 2024"
+        },
+        {
+            "bbox": [
+                297.0,
+                2105.0,
+                539.0,
+                2135.0
+            ],
+            "category": "Page-footer",
+            "text": "Preprint. Under review."
+        }
+    ],
+    "created_at": 1765417906174
+}

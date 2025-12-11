@@ -1,0 +1,324 @@
+
+================================================================================
+PDF文本覆盖处理 - 字母替换为'c'
+================================================================================
+
+[1/5] 加载JSON文件: demos/test-title.json
+[2/5] 打开PDF文件: demos/test-title.pdf
+[3/5] 处理 1 个页面...
+  坐标转换: 图片DPI 200 -> PDF DPI 72
+  缩放比例: 0.3600
+
+  页面 0: 12 个元素
+
+================================================================================
+[ELEMENT] Text: 'cccccc cccccccccccccc cccccccc: cccccccc ccccc cccccccccc cc...' (len=83)
+[ELEMENT] BBox: (124.9, 96.6, 488.9, 134.8)
+[ELEMENT] Font size: 12
+================================================================================
+[WRAP] Char 'c' @ x=482.6 + width=6.0 > max=487.9
+[WRAP] Before wrap: cursor_x=482.6, cstk_x=125.9, cursor_y=107.8
+[FLUSH] Text='cccccc ccccccccccccc...' @ position (125.9, 107.8)
+[FLUSH] cursor_x before flush: 482.6
+[FLUSH] Setting cstk_x = cursor_x (482.6)
+[WRAP] After wrap: cursor_x=125.9, cstk_x=125.9, cursor_y=122.2
+[FLUSH] Text='ccc-ccccc cccccccccc...' @ position (125.9, 122.2)
+[FLUSH] cursor_x before flush: 241.3
+[FLUSH] Setting cstk_x = cursor_x (241.3)
+
+================================================================================
+[ELEMENT] Text length: 71 (contains special chars)
+[ELEMENT] BBox: (134.6, 160.4, 484.2, 174.8)
+[ELEMENT] Font size: 11
+================================================================================
+[FLUSH] Text (len=71) @ position (135.6, 170.7)
+[FLUSH] cursor_x before flush: 468.7
+[FLUSH] Setting cstk_x = cursor_x (468.7)
+
+================================================================================
+[ELEMENT] Text length: 38 (contains special chars)
+[ELEMENT] BBox: (222.5, 176.2, 391.3, 188.8)
+[ELEMENT] Font size: 9
+================================================================================
+[FLUSH] Text (len=38) @ position (223.5, 184.8)
+[FLUSH] cursor_x before flush: 375.5
+[FLUSH] Setting cstk_x = cursor_x (375.5)
+
+================================================================================
+[ELEMENT] Text: 'cccccccc@ccc.ccc.ccc.cc, ccccccc.ccccc@ccccccccc.ccc,
+cccccc...' (len=125)
+[ELEMENT] BBox: (137.9, 192.0, 476.6, 214.4)
+[ELEMENT] Font size: 8
+================================================================================
+[WRAP] Char 'c' @ x=473.9 + width=4.0 > max=475.6
+[WRAP] Before wrap: cursor_x=473.9, cstk_x=138.9, cursor_y=199.8
+[FLUSH] Text='cccccccc@ccc.ccc.ccc...' @ position (138.9, 199.8)
+[FLUSH] cursor_x before flush: 473.9
+[FLUSH] Setting cstk_x = cursor_x (473.9)
+[WRAP] After wrap: cursor_x=138.9, cstk_x=138.9, cursor_y=209.4
+[FLUSH] Text='c.cccc@ccccccccc.ccc...' @ position (138.9, 209.4)
+[FLUSH] cursor_x before flush: 292.5
+[FLUSH] Setting cstk_x = cursor_x (292.5)
+
+================================================================================
+[ELEMENT] Text: 'ccc ccc ccccccc ccc cccccc cccc cc: ccccc://ccc.cccccc
+
+cccc...' (len=113)
+[ELEMENT] BBox: (160.2, 220.5, 451.4, 249.3)
+[ELEMENT] Font size: 10
+================================================================================
+[WRAP] Char 'c' @ x=447.9 + width=5.0 > max=450.4
+[WRAP] Before wrap: cursor_x=447.9, cstk_x=161.2, cursor_y=230.0
+[FLUSH] Text='ccc ccc ccccccc ccc ...' @ position (161.2, 230.0)
+[FLUSH] cursor_x before flush: 447.9
+[FLUSH] Setting cstk_x = cursor_x (447.9)
+[WRAP] After wrap: cursor_x=161.2, cstk_x=161.2, cursor_y=242.0
+[FLUSH] Text='c cccccc: ccccc://cc...' @ position (161.2, 242.0)
+[FLUSH] cursor_x before flush: 386.2
+[FLUSH] Setting cstk_x = cursor_x (386.2)
+
+================================================================================
+[ELEMENT] Text: 'cccccc 1: ccccccccc ccccccc cccc cccccc cccccccccccccc (ccc)...' (len=197)
+[ELEMENT] BBox: (106.6, 467.8, 507.6, 490.1)
+[ELEMENT] Font size: 8
+================================================================================
+[WRAP] Char '×' @ x=502.3 + width=4.7 > max=506.6
+[WRAP] Before wrap: cursor_x=502.3, cstk_x=107.6, cursor_y=475.6
+[FLUSH] Text='cccccc 1: ccccccccc ...' @ position (107.6, 475.6)
+[FLUSH] cursor_x before flush: 502.3
+[FLUSH] Setting cstk_x = cursor_x (502.3)
+[WRAP] After wrap: cursor_x=107.6, cstk_x=107.6, cursor_y=485.2
+[FLUSH] Text='×512 ccccccc (ccc), ...' @ position (107.6, 485.2)
+[FLUSH] cursor_x before flush: 442.7
+[FLUSH] Setting cstk_x = cursor_x (442.7)
+
+================================================================================
+[ELEMENT] Text: 'cccccccc...' (len=8)
+[ELEMENT] BBox: (283.3, 498.0, 331.9, 510.6)
+[ELEMENT] Font size: 9
+================================================================================
+[FLUSH] Text='cccccccc...' @ position (284.3, 506.7)
+[FLUSH] cursor_x before flush: 320.3
+[FLUSH] Setting cstk_x = cursor_x (320.3)
+
+================================================================================
+[ELEMENT] Text: 'cc ccccccc cccccc cccccccccccccc cccccccc (ccc), c ccc ccccc...' (len=1458)
+[ELEMENT] BBox: (141.5, 517.5, 472.3, 716.9)
+[ELEMENT] Font size: 8
+================================================================================
+[WRAP] Char 'c' @ x=470.5 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=470.5, cstk_x=142.5, cursor_y=525.3
+[FLUSH] Text='cc ccccccc cccccc cc...' @ position (142.5, 525.3)
+[FLUSH] cursor_x before flush: 470.5
+[FLUSH] Setting cstk_x = cursor_x (470.5)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=534.9
+[WRAP] Char 'c' @ x=469.6 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=469.6, cstk_x=142.5, cursor_y=534.9
+[FLUSH] Text='c ccc cccccccccccccc...' @ position (142.5, 534.9)
+[FLUSH] cursor_x before flush: 469.6
+[FLUSH] Setting cstk_x = cursor_x (469.6)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=544.5
+[WRAP] Char '”' @ x=470.9 + width=2.2 > max=471.3
+[WRAP] Before wrap: cursor_x=470.9, cstk_x=142.5, cursor_y=544.5
+[FLUSH] Text='c-cccccccccc ccccccc...' @ position (142.5, 544.5)
+[FLUSH] cursor_x before flush: 470.9
+[FLUSH] Setting cstk_x = cursor_x (470.9)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=554.1
+[WRAP] Char 'c' @ x=470.9 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=470.9, cstk_x=142.5, cursor_y=554.1
+[FLUSH] Text='”. cccc cccccc, cccc...' @ position (142.5, 554.1)
+[FLUSH] cursor_x before flush: 470.9
+[FLUSH] Setting cstk_x = cursor_x (470.9)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=563.7
+[WRAP] Char 'c' @ x=471.0 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=471.0, cstk_x=142.5, cursor_y=563.7
+[FLUSH] Text='cccc ccccccccccccc c...' @ position (142.5, 563.7)
+[FLUSH] cursor_x before flush: 471.0
+[FLUSH] Setting cstk_x = cursor_x (471.0)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=573.3
+[WRAP] Char 'c' @ x=470.8 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=470.8, cstk_x=142.5, cursor_y=573.3
+[FLUSH] Text='c cc cccccc ccccccc ...' @ position (142.5, 573.3)
+[FLUSH] cursor_x before flush: 470.8
+[FLUSH] Setting cstk_x = cursor_x (470.8)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=582.9
+[WRAP] Char 'c' @ x=468.3 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=468.3, cstk_x=142.5, cursor_y=582.9
+[FLUSH] Text='cccccc, ccc cccccccc...' @ position (142.5, 582.9)
+[FLUSH] cursor_x before flush: 468.3
+[FLUSH] Setting cstk_x = cursor_x (468.3)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=592.5
+[WRAP] Char 'c' @ x=469.0 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=469.0, cstk_x=142.5, cursor_y=592.5
+[FLUSH] Text='ccc) cccc 18.65 cc 1...' @ position (142.5, 592.5)
+[FLUSH] cursor_x before flush: 469.0
+[FLUSH] Setting cstk_x = cursor_x (469.0)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=602.1
+[WRAP] Char '(' @ x=469.6 + width=2.7 > max=471.3
+[WRAP] Before wrap: cursor_x=469.6, cstk_x=142.5, cursor_y=602.1
+[FLUSH] Text='c ccccc. cc cc cccc ...' @ position (142.5, 602.1)
+[FLUSH] cursor_x before flush: 469.6
+[FLUSH] Setting cstk_x = cursor_x (469.6)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=611.7
+[WRAP] Char 'c' @ x=470.9 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=470.9, cstk_x=142.5, cursor_y=611.7
+[FLUSH] Text='(ccc) cc cccccccc cc...' @ position (142.5, 611.7)
+[FLUSH] cursor_x before flush: 470.9
+[FLUSH] Setting cstk_x = cursor_x (470.9)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=621.3
+[WRAP] Char 'c' @ x=468.3 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=468.3, cstk_x=142.5, cursor_y=621.3
+[FLUSH] Text='cc ccccccccccc. cccc...' @ position (142.5, 621.3)
+[FLUSH] cursor_x before flush: 468.3
+[FLUSH] Setting cstk_x = cursor_x (468.3)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=630.9
+[WRAP] Char 'c' @ x=470.1 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=470.1, cstk_x=142.5, cursor_y=630.9
+[FLUSH] Text='cccc cccccccc cc ccc...' @ position (142.5, 630.9)
+[FLUSH] cursor_x before flush: 470.1
+[FLUSH] Setting cstk_x = cursor_x (470.1)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=640.5
+[WRAP] Char ' ' @ x=469.6 + width=2.2 > max=471.3
+[WRAP] Before wrap: cursor_x=469.6, cstk_x=142.5, cursor_y=640.5
+[FLUSH] Text='c. ccc ccccccc ccccc...' @ position (142.5, 640.5)
+[FLUSH] cursor_x before flush: 469.6
+[FLUSH] Setting cstk_x = cursor_x (469.6)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=650.1
+[WRAP] Char 'c' @ x=470.9 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=470.9, cstk_x=142.5, cursor_y=650.1
+[FLUSH] Text='ccccc cc-cccccccc, c...' @ position (142.5, 650.1)
+[FLUSH] cursor_x before flush: 470.9
+[FLUSH] Setting cstk_x = cursor_x (470.9)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=659.7
+[WRAP] Char 'c' @ x=468.7 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=468.7, cstk_x=142.5, cursor_y=659.7
+[FLUSH] Text='ccccc ccc ccc cccccc...' @ position (142.5, 659.7)
+[FLUSH] cursor_x before flush: 468.7
+[FLUSH] Setting cstk_x = cursor_x (468.7)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=669.3
+[WRAP] Char 'c' @ x=468.3 + width=4.0 > max=471.3
+[WRAP] Before wrap: cursor_x=468.3, cstk_x=142.5, cursor_y=669.3
+[FLUSH] Text='cccc. cc cccc cccccc...' @ position (142.5, 669.3)
+[FLUSH] cursor_x before flush: 468.3
+[FLUSH] Setting cstk_x = cursor_x (468.3)
+[WRAP] After wrap: cursor_x=142.5, cstk_x=142.5, cursor_y=678.9
+[FLUSH] Text='cc cccccc cccccccccc...' @ position (142.5, 678.9)
+[FLUSH] cursor_x before flush: 299.8
+[FLUSH] Setting cstk_x = cursor_x (299.8)
+
+================================================================================
+[ELEMENT] Text: '*ccccccccccccc ccccccc: cccccc@ccc.ccc.cc, cccccccccc@cccccc...' (len=84)
+[ELEMENT] BBox: (118.4, 727.7, 459.7, 740.0)
+[ELEMENT] Font size: 8
+================================================================================
+[FLUSH] Text='*ccccccccccccc ccccc...' @ position (119.4, 735.5)
+[FLUSH] cursor_x before flush: 437.9
+[FLUSH] Setting cstk_x = cursor_x (437.9)
+    处理进度: 10/12
+
+================================================================================
+[ELEMENT] Text: 'ccccc:2404.02905c2 [cc.cc] 10 ccc 2024...' (len=38)
+[ELEMENT] BBox: (15.8, 211.1, 36.4, 562.5)
+[ELEMENT] Font size: 12
+================================================================================
+[WRAP] Char 'c' @ x=34.8 + width=6.0 > max=35.4
+[WRAP] Before wrap: cursor_x=34.8, cstk_x=16.8, cursor_y=222.3
+[FLUSH] Text='ccc...' @ position (16.8, 222.3)
+[FLUSH] cursor_x before flush: 34.8
+[FLUSH] Setting cstk_x = cursor_x (34.8)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=236.7
+[WRAP] Char '2' @ x=32.2 + width=6.7 > max=35.4
+[WRAP] Before wrap: cursor_x=32.2, cstk_x=16.8, cursor_y=236.7
+[FLUSH] Text='cc:...' @ position (16.8, 236.7)
+[FLUSH] cursor_x before flush: 32.2
+[FLUSH] Setting cstk_x = cursor_x (32.2)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=251.1
+[WRAP] Char '0' @ x=30.2 + width=6.7 > max=35.4
+[WRAP] Before wrap: cursor_x=30.2, cstk_x=16.8, cursor_y=251.1
+[FLUSH] Text='24...' @ position (16.8, 251.1)
+[FLUSH] cursor_x before flush: 30.2
+[FLUSH] Setting cstk_x = cursor_x (30.2)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=265.5
+[WRAP] Char '0' @ x=33.5 + width=6.7 > max=35.4
+[WRAP] Before wrap: cursor_x=33.5, cstk_x=16.8, cursor_y=265.5
+[FLUSH] Text='04....' @ position (16.8, 265.5)
+[FLUSH] cursor_x before flush: 33.5
+[FLUSH] Setting cstk_x = cursor_x (33.5)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=279.9
+[WRAP] Char '9' @ x=30.2 + width=6.7 > max=35.4
+[WRAP] Before wrap: cursor_x=30.2, cstk_x=16.8, cursor_y=279.9
+[FLUSH] Text='02...' @ position (16.8, 279.9)
+[FLUSH] cursor_x before flush: 30.2
+[FLUSH] Setting cstk_x = cursor_x (30.2)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=294.3
+[WRAP] Char '5' @ x=30.2 + width=6.7 > max=35.4
+[WRAP] Before wrap: cursor_x=30.2, cstk_x=16.8, cursor_y=294.3
+[FLUSH] Text='90...' @ position (16.8, 294.3)
+[FLUSH] cursor_x before flush: 30.2
+[FLUSH] Setting cstk_x = cursor_x (30.2)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=308.7
+[WRAP] Char '2' @ x=29.5 + width=6.7 > max=35.4
+[WRAP] Before wrap: cursor_x=29.5, cstk_x=16.8, cursor_y=308.7
+[FLUSH] Text='5c...' @ position (16.8, 308.7)
+[FLUSH] cursor_x before flush: 29.5
+[FLUSH] Setting cstk_x = cursor_x (29.5)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=323.1
+[WRAP] Char 'c' @ x=30.2 + width=6.0 > max=35.4
+[WRAP] Before wrap: cursor_x=30.2, cstk_x=16.8, cursor_y=323.1
+[FLUSH] Text='2 [...' @ position (16.8, 323.1)
+[FLUSH] cursor_x before flush: 30.2
+[FLUSH] Setting cstk_x = cursor_x (30.2)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=337.5
+[WRAP] Char 'c' @ x=32.2 + width=6.0 > max=35.4
+[WRAP] Before wrap: cursor_x=32.2, cstk_x=16.8, cursor_y=337.5
+[FLUSH] Text='cc....' @ position (16.8, 337.5)
+[FLUSH] cursor_x before flush: 32.2
+[FLUSH] Setting cstk_x = cursor_x (32.2)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=351.9
+[WRAP] Char ' ' @ x=32.2 + width=3.3 > max=35.4
+[WRAP] Before wrap: cursor_x=32.2, cstk_x=16.8, cursor_y=351.9
+[FLUSH] Text='cc]...' @ position (16.8, 351.9)
+[FLUSH] cursor_x before flush: 32.2
+[FLUSH] Setting cstk_x = cursor_x (32.2)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=366.3
+[WRAP] Char 'c' @ x=33.5 + width=6.0 > max=35.4
+[WRAP] Before wrap: cursor_x=33.5, cstk_x=16.8, cursor_y=366.3
+[FLUSH] Text='10 ...' @ position (16.8, 366.3)
+[FLUSH] cursor_x before flush: 33.5
+[FLUSH] Setting cstk_x = cursor_x (33.5)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=380.7
+[WRAP] Char ' ' @ x=34.8 + width=3.3 > max=35.4
+[WRAP] Before wrap: cursor_x=34.8, cstk_x=16.8, cursor_y=380.7
+[FLUSH] Text='ccc...' @ position (16.8, 380.7)
+[FLUSH] cursor_x before flush: 34.8
+[FLUSH] Setting cstk_x = cursor_x (34.8)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=395.1
+[WRAP] Char '2' @ x=30.2 + width=6.7 > max=35.4
+[WRAP] Before wrap: cursor_x=30.2, cstk_x=16.8, cursor_y=395.1
+[FLUSH] Text='20...' @ position (16.8, 395.1)
+[FLUSH] cursor_x before flush: 30.2
+[FLUSH] Setting cstk_x = cursor_x (30.2)
+[WRAP] After wrap: cursor_x=16.8, cstk_x=16.8, cursor_y=409.5
+[FLUSH] Text='24...' @ position (16.8, 409.5)
+[FLUSH] cursor_x before flush: 30.2
+[FLUSH] Setting cstk_x = cursor_x (30.2)
+
+================================================================================
+[ELEMENT] Text: 'cccccccc. ccccc cccccc....' (len=23)
+[ELEMENT] BBox: (106.9, 755.8, 194.0, 766.6)
+[ELEMENT] Font size: 7
+================================================================================
+[FLUSH] Text='cccccccc. ccccc cccc...' @ position (107.9, 762.8)
+[FLUSH] cursor_x before flush: 182.2
+[FLUSH] Setting cstk_x = cursor_x (182.2)
+
+[4/5] 保存输出PDF: output/test-title_overlay.pdf
+[5/5] 完成!
+
+================================================================================
+处理统计:
+  - 总页数: 1
+  - 总元素: 11
+  - 输出文件: output/test-title_overlay.pdf
+================================================================================
+
