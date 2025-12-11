@@ -1,0 +1,59 @@
+{
+  "pages": [
+    {
+      "page_index": 0,
+      "elements": [
+        {
+          "bbox": [
+            50,
+            50,
+            545,
+            100
+          ],
+          "category": "title",
+          "text": "Sample Document for Text Overlay Demo"
+        },
+        {
+          "bbox": [
+            50,
+            120,
+            545,
+            180
+          ],
+          "category": "text",
+          "text": "Einstein discovered that energy and mass are related."
+        },
+        {
+          "bbox": [
+            50,
+            200,
+            545,
+            260
+          ],
+          "category": "text",
+          "text": "The famous equation is $E=mc^2$ which is energy equals mass times speed of light squared."
+        },
+        {
+          "bbox": [
+            50,
+            280,
+            545,
+            340
+          ],
+          "category": "text",
+          "text": "Newton's second law describes motion with $F=ma$ which is force equals mass times acceleration."
+        },
+        {
+          "bbox": [
+            50,
+            360,
+            545,
+            420
+          ],
+          "category": "text",
+          "text": "The year 2024 marks 100 years since the theory was published."
+        }
+      ]
+    }
+  ]
+}
