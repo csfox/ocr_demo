@@ -57,6 +57,7 @@ def parse_mixed_content(text: str) -> list:
 def render_latex_to_bytes_with_size(latex_formula: str, fontsize: int = 20, dpi: int = 300) -> tuple:
     """
     Render a LaTeX formula to PNG image bytes and return size info.
+    Automatically crops transparent borders to minimize white space.
 
     Args:
         latex_formula: LaTeX formula string (without $ delimiters)
@@ -83,17 +84,40 @@ def render_latex_to_bytes_with_size(latex_formula: str, fontsize: int = 20, dpi:
     # Re-position text
     text.set_position((0, 0))
 
-    # Save to bytes buffer
+    # Save to bytes buffer with minimal padding
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=dpi, bbox_inches='tight',
-                transparent=True, pad_inches=0.1)
+                transparent=True, pad_inches=0.02)  # Reduced from 0.1 to 0.02
     plt.close(fig)
 
     buf.seek(0)
-    img_bytes = buf.getvalue()
 
-    # Get actual image dimensions
-    pil_img = Image.open(io.BytesIO(img_bytes))
+    # Load image and crop transparent borders
+    pil_img = Image.open(buf)
+
+    # Get the bounding box of non-transparent pixels
+    if pil_img.mode == 'RGBA':
+        # Get alpha channel
+        alpha = pil_img.split()[-1]
+        # Find bounding box of non-zero alpha
+        bbox = alpha.getbbox()
+        if bbox:
+            # Crop to content with small margin (2 pixels)
+            margin = 2
+            bbox = (
+                max(0, bbox[0] - margin),
+                max(0, bbox[1] - margin),
+                min(pil_img.width, bbox[2] + margin),
+                min(pil_img.height, bbox[3] + margin)
+            )
+            pil_img = pil_img.crop(bbox)
+
+    # Convert back to bytes
+    output_buf = io.BytesIO()
+    pil_img.save(output_buf, format='PNG')
+    output_buf.seek(0)
+    img_bytes = output_buf.getvalue()
+
     width, height = pil_img.size
 
     return img_bytes, width, height
@@ -269,12 +293,13 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                         return
 
                 # Calculate image rect to align baseline
-                # Formula center should align with text baseline
+                # Formula center should align with text x-height center
+                # EXTREME ratio: 90% up, 10% down for maximum upward alignment
                 img_rect = fitz.Rect(
                     cursor_x,
-                    cursor_y - img_height_pt * 0.65,  # Raise formula
+                    cursor_y - img_height_pt * 0.90,  # Raise formula (EXTREME!)
                     cursor_x + img_width_pt,
-                    cursor_y + img_height_pt * 0.35   # Lower formula
+                    cursor_y + img_height_pt * 0.10   # Lower formula (minimum)
                 )
 
                 # Insert formula image
@@ -329,6 +354,9 @@ def create_enhanced_demo():
     long_text = "This text automatically shrinks to fit the bounding box. The default size is 12pt, and it only reduces if the text doesn't fit."
 
     for bbox, label in test_boxes:
+        # Draw background color (light blue)
+        page.draw_rect(bbox, color=(0.9, 0.95, 1.0), fill=(0.9, 0.95, 1.0))
+
         # Draw bbox border
         page.draw_rect(bbox, color=(0, 0, 1), width=1)
 
@@ -356,6 +384,9 @@ def create_enhanced_demo():
     ]
 
     for label, mixed_text, bbox in mixed_tests:
+        # Draw background color (light green)
+        page.draw_rect(bbox, color=(0.9, 1.0, 0.9), fill=(0.9, 1.0, 0.9))
+
         # Draw bbox border
         page.draw_rect(bbox, color=(0, 0.7, 0), width=1)
 
@@ -383,6 +414,9 @@ def create_enhanced_demo():
     for i, fs in enumerate(font_sizes):
         y_pos = y_start + i * 70
         bbox = fitz.Rect(50, y_pos, 545, y_pos + 60)
+
+        # Draw background color (light purple)
+        page.draw_rect(bbox, color=(0.98, 0.9, 1.0), fill=(0.98, 0.9, 1.0))
 
         # Draw bbox
         page.draw_rect(bbox, color=(0.7, 0, 0.7), width=1)

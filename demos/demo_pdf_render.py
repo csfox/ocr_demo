@@ -18,6 +18,7 @@ from PIL import Image
 def render_latex_to_bytes(latex_formula: str, fontsize: int = 20, dpi: int = 300) -> bytes:
     """
     Render a LaTeX formula to PNG image bytes using matplotlib.
+    Automatically crops transparent borders to minimize white space.
 
     Args:
         latex_formula: LaTeX formula string (without $ delimiters)
@@ -45,14 +46,40 @@ def render_latex_to_bytes(latex_formula: str, fontsize: int = 20, dpi: int = 300
     # Re-position text
     text.set_position((0, 0))
 
-    # Save to bytes buffer
+    # Save to bytes buffer with minimal padding
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=dpi, bbox_inches='tight',
-                transparent=True, pad_inches=0.1)
+                transparent=True, pad_inches=0.02)  # Reduced from 0.1 to 0.02
     plt.close(fig)
 
     buf.seek(0)
-    return buf.getvalue()
+
+    # Load image and crop transparent borders
+    pil_img = Image.open(buf)
+
+    # Get the bounding box of non-transparent pixels
+    if pil_img.mode == 'RGBA':
+        # Get alpha channel
+        alpha = pil_img.split()[-1]
+        # Find bounding box of non-zero alpha
+        bbox = alpha.getbbox()
+        if bbox:
+            # Crop to content with small margin (2 pixels)
+            margin = 2
+            bbox = (
+                max(0, bbox[0] - margin),
+                max(0, bbox[1] - margin),
+                min(pil_img.width, bbox[2] + margin),
+                min(pil_img.height, bbox[3] + margin)
+            )
+            pil_img = pil_img.crop(bbox)
+
+    # Convert back to bytes
+    output_buf = io.BytesIO()
+    pil_img.save(output_buf, format='PNG')
+    output_buf.seek(0)
+
+    return output_buf.getvalue()
 
 
 def create_demo_pdf():
