@@ -673,11 +673,21 @@ def render_table(page, bbox, table_html, fontsize=10):
 
         # Draw header text (centered, bold) using loaded font for Unicode support
         if loaded_font:
+            # Adaptive font size to fit text in cell
+            adaptive_fontsize = header_fontsize
+            min_fontsize = 6  # Minimum readable font size
+            cell_padding = 4  # Total horizontal padding
+            max_text_width = col_width - cell_padding
+
+            text_width = loaded_font.text_length(header, fontsize=adaptive_fontsize)
+            while text_width > max_text_width and adaptive_fontsize > min_fontsize:
+                adaptive_fontsize -= 0.5
+                text_width = loaded_font.text_length(header, fontsize=adaptive_fontsize)
+
             # Use loaded font with insert_text for proper Unicode rendering
-            text_y = cell_y0 + row_height / 2 + header_fontsize / 3
+            text_y = cell_y0 + row_height / 2 + adaptive_fontsize / 3
 
             # Center the text
-            text_width = loaded_font.text_length(header, fontsize=header_fontsize)
             text_x = cell_x0 + (col_width - text_width) / 2
 
             # Use fontfile parameter with the font path
@@ -688,7 +698,7 @@ def render_table(page, bbox, table_html, fontsize=10):
                 text=header,
                 fontname=safe_fontname,
                 fontfile=fontfile,
-                fontsize=header_fontsize,
+                fontsize=adaptive_fontsize,
                 color=(0, 0, 0)
             )
         else:
@@ -724,17 +734,27 @@ def render_table(page, bbox, table_html, fontsize=10):
 
             # Insert text using loaded font for better Unicode support
             if loaded_font:
+                # Adaptive font size to fit text in cell
+                adaptive_fontsize = fontsize
+                min_fontsize = 5  # Minimum readable font size for data cells
+                cell_padding = 6  # Total horizontal padding
+                max_text_width = col_width - cell_padding
+
+                text_width = loaded_font.text_length(text, fontsize=adaptive_fontsize)
+                while text_width > max_text_width and adaptive_fontsize > min_fontsize:
+                    adaptive_fontsize -= 0.5
+                    text_width = loaded_font.text_length(text, fontsize=adaptive_fontsize)
+
                 # Use loaded font with insert_text for proper Unicode rendering
                 # Calculate text position based on alignment
                 if is_numeric_text(text):
                     # Right align numbers
-                    text_width = loaded_font.text_length(text, fontsize=fontsize)
                     text_x = cell_x1 - text_width - 3
                 else:
                     # Left align text
                     text_x = cell_x0 + 3
 
-                text_y = cell_y0 + row_height / 2 + fontsize / 3
+                text_y = cell_y0 + row_height / 2 + adaptive_fontsize / 3
 
                 # Use fontfile parameter with the font path
                 # Remove spaces from font name as PyMuPDF doesn't accept them
@@ -744,11 +764,11 @@ def render_table(page, bbox, table_html, fontsize=10):
                     text=text,
                     fontname=safe_fontname,
                     fontfile=fontfile,
-                    fontsize=fontsize,
+                    fontsize=adaptive_fontsize,
                     color=color
                 )
             else:
-                # Fall back to textbox
+                # Fall back to textbox (automatically handles overflow)
                 if is_numeric_text(text):
                     text_rect = fitz.Rect(cell_x0 + 2, cell_y0, cell_x1 - 3, cell_y1)
                     align = fitz.TEXT_ALIGN_RIGHT

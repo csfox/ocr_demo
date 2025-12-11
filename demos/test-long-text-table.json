@@ -1,0 +1,16 @@
+{
+    "page_index": 0,
+    "elements": [
+        {
+            "bbox": [50, 50, 550, 100],
+            "category": "Title",
+            "text": "Long Text Table Test"
+        },
+        {
+            "bbox": [50, 120, 550, 400],
+            "category": "Table",
+            "text": "<table><thead><tr><th>Method Name</th><th>Description</th><th>Parameters</th><th>Return Value</th></tr></thead><tbody><tr><td>calculate_sum</td><td>Calculates the sum of two numbers</td><td>a: int, b: int</td><td>int</td></tr><tr><td>find_maximum_value</td><td>Finds the maximum value in a list</td><td>numbers: List[int]</td><td>int</td></tr><tr><td>process_data_with_filters</td><td>Processes data applying multiple filters</td><td>data: DataFrame, filters: Dict</td><td>DataFrame</td></tr><tr><td>generate_report</td><td>Generates comprehensive analysis report</td><td>data: Any, format: str</td><td>str</td></tr></tbody></table>"
+        }
+    ],
+    "created_at": 1765439481133
+}
