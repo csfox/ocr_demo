@@ -1,0 +1,21 @@
+{
+    "page_index": 0,
+    "elements": [
+        {
+            "bbox": [100, 100, 500, 150],
+            "category": "Title",
+            "text": "Simple Table Test"
+        },
+        {
+            "bbox": [100, 170, 700, 450],
+            "category": "Table",
+            "text": "<table><thead><tr><th>Type</th><th>Model</th><th>FID↓</th><th>IS↑</th><th>Time</th></tr></thead><tbody><tr><td>GAN</td><td>BigGAN [13]</td><td>8.43</td><td>177.9</td><td>—</td></tr><tr><td>Diff.</td><td>ADM [26]</td><td>23.24</td><td>101.0</td><td>—</td></tr><tr><td>Diff.</td><td>DiT-XL/2 [63]</td><td>3.04</td><td>240.8</td><td>81</td></tr><tr><td>Mask.</td><td>MaskGIT [17]</td><td>7.32</td><td>156.0</td><td>0.5†</td></tr><tr><td>AR</td><td>VQGAN [30]</td><td>26.52</td><td>66.8</td><td>25†</td></tr><tr><td>VAR</td><td>VAR-d36</td><td><strong>2.63</strong></td><td><strong>303.2</strong></td><td>1</td></tr></tbody></table>"
+        },
+        {
+            "bbox": [100, 470, 700, 550],
+            "category": "Text",
+            "text": "This table shows performance comparison of different generative models."
+        }
+    ],
+    "created_at": 1765439481133
+}

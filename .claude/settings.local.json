@@ -6,7 +6,10 @@
       "Bash(cd:*)",
       "Bash(python3:*)",
       "Bash(.venv/Scripts/python:*)",
-      "Bash(python demos/demo_table_render.py:*)"
+      "Bash(python demos/demo_table_render.py:*)",
+      "Bash(cat:*)",
+      "Bash(python demo_table_render.py:*)",
+      "Bash(python demo_text_overlay.py:*)"
     ]
   }
 }

@@ -17,6 +17,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import io
 from PIL import Image
+from html.parser import HTMLParser
+from pdf_utils import load_unicode_font, get_safe_fontname
 
 
 # Language-specific line height map (from restorer.py)
@@ -28,6 +30,84 @@ LANG_LINEHEIGHT_MAP = {
     "ar": 1.0,     # Arabic
     "ru": 0.8,     # Russian
 }
+
+
+class TableHTMLParser(HTMLParser):
+    """Parse HTML table structure and extract data"""
+
+    def __init__(self):
+        super().__init__()
+        self.headers = []
+        self.rows = []
+        self.current_row = []
+        self.current_cell = {'text': '', 'bold': False, 'sup': False}
+        self.in_header = False
+        self.in_tbody = False
+        self.in_cell = False
+        self.in_strong = False
+        self.in_sup = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'thead':
+            self.in_header = True
+        elif tag == 'tbody':
+            self.in_tbody = True
+        elif tag == 'tr':
+            self.current_row = []
+        elif tag in ['th', 'td']:
+            self.in_cell = True
+            self.current_cell = {'text': '', 'bold': False, 'sup': False}
+        elif tag == 'strong':
+            self.in_strong = True
+            self.current_cell['bold'] = True
+        elif tag == 'sup':
+            self.in_sup = True
+            self.current_cell['sup'] = True
+
+    def handle_data(self, data):
+        if self.in_cell and data.strip():
+            self.current_cell['text'] += data.strip()
+
+    def handle_endtag(self, tag):
+        if tag in ['th', 'td']:
+            self.in_cell = False
+            if self.in_header:
+                self.headers.append(self.current_cell['text'])
+            else:
+                self.current_row.append(self.current_cell)
+        elif tag == 'tr' and self.current_row:
+            self.rows.append(self.current_row)
+        elif tag == 'thead':
+            self.in_header = False
+        elif tag == 'tbody':
+            self.in_tbody = False
+        elif tag == 'strong':
+            self.in_strong = False
+        elif tag == 'sup':
+            self.in_sup = False
+
+    def get_table_data(self):
+        """Return parsed table data"""
+        return {
+            'headers': self.headers,
+            'rows': self.rows
+        }
+
+
+def is_numeric_text(text: str) -> bool:
+    """
+    Check if text is primarily numeric (for right alignment)
+
+    Args:
+        text: Text to check
+
+    Returns:
+        bool: True if text matches number patterns
+    """
+    if not text:
+        return False
+    # Check if text matches number patterns: digits, dots, dashes, daggers
+    return bool(re.match(r'^[\d.—†\-]+$', text))
 
 
 def detect_language(text: str) -> str:
@@ -535,6 +615,155 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
     flush_buffer()
 
 
+def render_table(page, bbox, table_html, fontsize=10):
+    """
+    Render HTML table on PDF page
+
+    Args:
+        page: fitz.Page object
+        bbox: Tuple of (x0, y0, x1, y1) coordinates
+        table_html: HTML table string
+        fontsize: Base font size for table text
+    """
+    # Parse HTML table
+    parser = TableHTMLParser()
+    parser.feed(table_html)
+    table_data = parser.get_table_data()
+
+    headers = table_data['headers']
+    rows = table_data['rows']
+
+    if not headers:
+        print("    [警告] 表格没有表头，跳过渲染")
+        return
+
+    # Load Unicode font using shared utility
+    loaded_font, fontfile = load_unicode_font()
+
+    # Calculate dimensions
+    x0, y0, x1, y1 = bbox
+    width = x1 - x0
+    height = y1 - y0
+
+    num_cols = len(headers)
+    num_rows = len(rows) + 1  # +1 for header row
+
+    col_width = width / num_cols
+    row_height = height / num_rows
+
+    # Header font size (slightly larger)
+    header_fontsize = fontsize + 1
+
+    print(f"    [表格信息] 列数: {num_cols}, 行数: {num_rows}, 列宽: {col_width:.1f}pt, 行高: {row_height:.1f}pt")
+
+    # Render header row with background
+    for col_idx, header in enumerate(headers):
+        cell_x0 = x0 + col_idx * col_width
+        cell_y0 = y0
+        cell_x1 = cell_x0 + col_width
+        cell_y1 = cell_y0 + row_height
+
+        # Draw cell border (no background fill)
+        header_rect = fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1)
+        page.draw_rect(header_rect, color=(0, 0, 0), width=0.5)
+
+        # Draw header text (centered, bold) using loaded font for Unicode support
+        if loaded_font:
+            # Use loaded font with insert_text for proper Unicode rendering
+            text_y = cell_y0 + row_height / 2 + header_fontsize / 3
+
+            # Center the text
+            text_width = loaded_font.text_length(header, fontsize=header_fontsize)
+            text_x = cell_x0 + (col_width - text_width) / 2
+
+            # Use fontfile parameter with the font path
+            # Remove spaces from font name as PyMuPDF doesn't accept them
+            safe_fontname = get_safe_fontname(loaded_font)
+            page.insert_text(
+                point=(text_x, text_y),
+                text=header,
+                fontname=safe_fontname,
+                fontfile=fontfile,
+                fontsize=header_fontsize,
+                color=(0, 0, 0)
+            )
+        else:
+            # Fall back to textbox
+            text_rect = fitz.Rect(cell_x0 + 2, cell_y0, cell_x1 - 2, cell_y1)
+            page.insert_textbox(
+                text_rect,
+                header,
+                fontsize=header_fontsize,
+                fontname="helv",
+                align=fitz.TEXT_ALIGN_CENTER,
+                color=(0, 0, 0)
+            )
+
+    # Render data rows
+    for row_idx, row in enumerate(rows):
+        for col_idx, cell in enumerate(row):
+            cell_x0 = x0 + col_idx * col_width
+            cell_y0 = y0 + (row_idx + 1) * row_height
+            cell_x1 = cell_x0 + col_width
+            cell_y1 = cell_y0 + row_height
+
+            # Draw cell border
+            cell_rect = fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1)
+            page.draw_rect(cell_rect, color=(0, 0, 0), width=0.5)
+
+            # Get cell text and properties
+            text = cell['text']
+            is_bold = cell['bold']
+
+            # Color: black for bold, dark gray for normal
+            color = (0, 0, 0) if is_bold else (0.2, 0.2, 0.2)
+
+            # Insert text using loaded font for better Unicode support
+            if loaded_font:
+                # Use loaded font with insert_text for proper Unicode rendering
+                # Calculate text position based on alignment
+                if is_numeric_text(text):
+                    # Right align numbers
+                    text_width = loaded_font.text_length(text, fontsize=fontsize)
+                    text_x = cell_x1 - text_width - 3
+                else:
+                    # Left align text
+                    text_x = cell_x0 + 3
+
+                text_y = cell_y0 + row_height / 2 + fontsize / 3
+
+                # Use fontfile parameter with the font path
+                # Remove spaces from font name as PyMuPDF doesn't accept them
+                safe_fontname = get_safe_fontname(loaded_font)
+                page.insert_text(
+                    point=(text_x, text_y),
+                    text=text,
+                    fontname=safe_fontname,
+                    fontfile=fontfile,
+                    fontsize=fontsize,
+                    color=color
+                )
+            else:
+                # Fall back to textbox
+                if is_numeric_text(text):
+                    text_rect = fitz.Rect(cell_x0 + 2, cell_y0, cell_x1 - 3, cell_y1)
+                    align = fitz.TEXT_ALIGN_RIGHT
+                else:
+                    text_rect = fitz.Rect(cell_x0 + 3, cell_y0, cell_x1 - 2, cell_y1)
+                    align = fitz.TEXT_ALIGN_LEFT
+
+                page.insert_textbox(
+                    text_rect,
+                    text,
+                    fontsize=fontsize,
+                    fontname="helv",
+                    align=align,
+                    color=color
+                )
+
+    print("    [OK] 表格渲染完成")
+
+
 def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None, image_dpi: int = 200, draw_bbox: bool = False):
     """
     Process PDF with OCR JSON: replace letters with 'c' and render back.
@@ -609,9 +838,13 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
         for elem_idx, element in enumerate(elements):
             bbox = element.get('bbox')
             text = element.get('text', '')
-            category = element.get('category', 'text')
+            category = element.get('category', 'text').lower()  # Normalize to lowercase
 
-            if not bbox or not text:
+            if not bbox:
+                continue
+
+            # For table elements, allow empty text (will contain HTML)
+            if category != 'table' and not text:
                 continue
 
             # Convert bbox to tuple
@@ -633,20 +866,32 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
             bg_color = detect_background_color(page, bbox)
             bg_color_norm = tuple(c / 255 for c in bg_color)
 
-            # Replace letters with 'c'
-            # modified_text = replace_letters_preserve_formulas(text) # TODO
-            modified_text = text
-
             # Draw background rectangle
             rect = fitz.Rect(bbox)
             page.draw_rect(rect, color=bg_color_norm, fill=bg_color_norm)
 
-            # Calculate adaptive font size
-            text_only = re.sub(r'\$.*?\$', 'FORMULA', modified_text)
-            fontsize = calculate_adaptive_font_size(text_only, rect, default_size=12, min_size=4)
+            # ========== Category-based Rendering ==========
+            if category == 'table':
+                # Table rendering path
+                try:
+                    print(f"    [表格] 元素 {elem_idx + 1}")
+                    render_table(page, bbox, text, fontsize=9)
+                except Exception as e:
+                    print(f"    [错误] 表格渲染失败: {e}")
+                    page.insert_textbox(rect, "错误: 表格渲染失败",
+                                       fontsize=10, color=(1, 0, 0))
+            else:
+                # Text/Title/Caption rendering path (existing logic)
+                # Replace letters with 'c'
+                # modified_text = replace_letters_preserve_formulas(text) # TODO
+                modified_text = text
 
-            # Render mixed content
-            render_mixed_content(page, modified_text, rect, fontsize)
+                # Calculate adaptive font size
+                text_only = re.sub(r'\$.*?\$', 'FORMULA', modified_text)
+                fontsize = calculate_adaptive_font_size(text_only, rect, default_size=12, min_size=4)
+
+                # Render mixed content
+                render_mixed_content(page, modified_text, rect, fontsize)
 
             # Draw bbox border if requested
             if draw_bbox:
