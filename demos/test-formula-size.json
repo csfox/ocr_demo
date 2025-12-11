@@ -1,0 +1,31 @@
+{
+    "page_index": 0,
+    "elements": [
+        {
+            "bbox": [100, 100, 700, 150],
+            "category": "Title",
+            "text": "Formula Size Test"
+        },
+        {
+            "bbox": [100, 170, 700, 250],
+            "category": "Text",
+            "text": "Einstein's famous equation is $E=mc^2$ where E is energy, m is mass, and c is the speed of light."
+        },
+        {
+            "bbox": [100, 270, 700, 350],
+            "category": "Text",
+            "text": "Newton's second law states that $F=ma$ where F is force, m is mass, and a is acceleration."
+        },
+        {
+            "bbox": [100, 370, 700, 470],
+            "category": "Text",
+            "text": "The quadratic formula is $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$ which solves equations of the form $ax^2+bx+c=0$."
+        },
+        {
+            "bbox": [100, 490, 700, 570],
+            "category": "Text",
+            "text": "More complex example: The Gaussian integral is $\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$ which is fundamental in probability."
+        }
+    ],
+    "created_at": 1765439481133
+}

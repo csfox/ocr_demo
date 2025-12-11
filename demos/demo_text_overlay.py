@@ -562,13 +562,17 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
             flush_buffer()
 
             try:
+                # Render formula with larger fontsize for better quality
+                formula_fontsize = fontsize * 0.9  # Increase formula size
                 formula_bytes, img_width_px, img_height_px = render_latex_to_bytes_with_size(
-                    content, fontsize=fontsize, dpi=300
+                    content, fontsize=formula_fontsize, dpi=300
                 )
 
-                scale_factor = fontsize / 12.0
-                img_width_pt = img_width_px * scale_factor * 0.15
-                img_height_pt = img_height_px * scale_factor * 0.15
+                # Convert pixels to points: 72 points/inch, 300 dpi
+                # Formula: points = pixels * (72 / dpi)
+                px_to_pt = 72.0 / 300.0  # 0.24
+                img_width_pt = img_width_px * px_to_pt
+                img_height_pt = img_height_px * px_to_pt
 
                 # Check if formula fits on current line
                 if cursor_x + img_width_pt > max_x:
