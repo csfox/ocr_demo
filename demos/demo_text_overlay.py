@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import io
 from PIL import Image
 from weasyprint import HTML
+from json_translator import translate_element_text, should_skip_translation as should_skip_translation_check
 
 
 # Language-specific line height map (from restorer.py)
@@ -715,9 +716,11 @@ def render_table(page, bbox, table_html, bg_color_rgb=(255, 255, 255)):
     print(f"    [OK] 表格渲染完成 (尺寸: {actual_width:.1f}x{actual_height:.1f}pt, 耗时: {elapsed_time:.2f}s)")
 
 
-def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None, image_dpi: int = 200, draw_bbox: bool = False):
+def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None, image_dpi: int = 200, draw_bbox: bool = False,
+                          translate: bool = False, src_lang: str = "en", tgt_lang: str = "zh",
+                          model_type: str = None, app_id: str = None):
     """
-    Process PDF with OCR JSON: replace letters with 'c' and render back.
+    Process PDF with OCR JSON: optionally translate and render back.
 
     Args:
         pdf_path: Input PDF file path
@@ -725,9 +728,17 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
         output_path: Output PDF path (optional)
         image_dpi: DPI of the image used for OCR (default: 200)
         draw_bbox: Whether to draw bbox borders for debugging (default: False)
+        translate: Whether to translate text elements (default: False)
+        src_lang: Source language for translation (default: "en")
+        tgt_lang: Target language for translation (default: "zh")
+        model_type: Translation model type (default: None, uses deepseek_v3)
+        app_id: Application ID for translation API (default: None)
     """
     print("\n" + "=" * 80)
-    print("PDF文本覆盖处理 - 字母替换为'c'")
+    if translate:
+        print(f"PDF文本覆盖处理 - 翻译模式 ({src_lang} -> {tgt_lang})")
+    else:
+        print("PDF文本覆盖处理")
     print("=" * 80)
 
     # Validate input files
@@ -817,9 +828,16 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
             bg_color = detect_background_color(page, bbox)
             bg_color_norm = tuple(c / 255 for c in bg_color)
 
-            # Draw background rectangle
+            # Draw background rectangle (slightly expanded to cover edge artifacts)
             rect = fitz.Rect(bbox)
-            page.draw_rect(rect, color=bg_color_norm, fill=bg_color_norm)
+            expand = 2  # 扩展像素数，防止漏出底部文本
+            expanded_rect = fitz.Rect(
+                rect.x0 - expand,
+                rect.y0 - expand,
+                rect.x1 + expand,
+                rect.y1 + expand
+            )
+            page.draw_rect(expanded_rect, color=bg_color_norm, fill=bg_color_norm)
 
             # ========== Category-based Rendering ==========
             if category == 'table':
@@ -890,10 +908,21 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
                     page.insert_textbox(rect, f"错误: 公式渲染失败\n{text[:50]}",
                                        fontsize=8, color=(1, 0, 0))
             else:
-                # Text/Title/Caption rendering path (existing logic)
-                # Replace letters with 'c'
-                # modified_text = replace_letters_preserve_formulas(text) # TODO
+                # Text/Title/Caption rendering path
                 modified_text = text
+
+                # Translate if enabled
+                if translate and not should_skip_translation_check(text, category):
+                    translated_text = translate_element_text(
+                        text, category,
+                        src_lang=src_lang,
+                        tgt_lang=tgt_lang,
+                        model_type=model_type,
+                        app_id=app_id,
+                    )
+                    if translated_text != text:
+                        modified_text = translated_text
+                        print(f"    [翻译] 元素 {elem_idx + 1}: OK")
 
                 # Calculate adaptive font size
                 text_only = re.sub(r'\$.*?\$', 'FORMULA', modified_text)
@@ -966,9 +995,28 @@ JSON格式:
     parser.add_argument('--draw-bbox', action='store_true',
                        help='在PDF上绘制bbox边框（调试用）')
 
+    # Translation options
+    parser.add_argument('--translate', action='store_true',
+                       help='启用翻译功能')
+    parser.add_argument('--src-lang', type=str, default='en',
+                       help='源语言 (默认: en)')
+    parser.add_argument('--tgt-lang', type=str, default='zh',
+                       help='目标语言 (默认: zh)')
+    parser.add_argument('--model', type=str, default=None,
+                       help='翻译模型 (deepseek_v3, volcengine)')
+    parser.add_argument('--app-id', type=str, default=None,
+                       help='翻译API的应用ID')
+
     args = parser.parse_args()
 
-    process_pdf_with_json(args.pdf_path, args.json_path, args.output, args.dpi, args.draw_bbox)
+    process_pdf_with_json(
+        args.pdf_path, args.json_path, args.output, args.dpi, args.draw_bbox,
+        translate=args.translate,
+        src_lang=args.src_lang,
+        tgt_lang=args.tgt_lang,
+        model_type=args.model,
+        app_id=args.app_id
+    )
 
 
 if __name__ == "__main__":
