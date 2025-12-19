@@ -59,12 +59,71 @@ def detect_language(text: str) -> str:
 
 
 def is_cjk_char(ch: str) -> bool:
-    """Check if a character is CJK (Chinese/Japanese/Korean)."""
+    """
+    Check if a character needs CJK font to render properly.
+    Includes CJK ideographs, punctuation, symbols, and full-width characters.
+    """
     if not ch:
         return False
     code = ord(ch)
-    # CJK Unified Ideographs: U+4E00-U+9FFF
-    return 0x4E00 <= code <= 0x9FFF
+    # CJK Unified Ideographs
+    if 0x4E00 <= code <= 0x9FFF:
+        return True
+    # CJK Unified Ideographs Extension A
+    if 0x3400 <= code <= 0x4DBF:
+        return True
+    # CJK Unified Ideographs Extension B-F (rarely used)
+    if 0x20000 <= code <= 0x2EBEF:
+        return True
+    # CJK Compatibility Ideographs
+    if 0xF900 <= code <= 0xFAFF:
+        return True
+    # CJK Symbols and Punctuation (。、「」『』【】〈〉《》等)
+    if 0x3000 <= code <= 0x303F:
+        return True
+    # Hiragana (Japanese)
+    if 0x3040 <= code <= 0x309F:
+        return True
+    # Katakana (Japanese)
+    if 0x30A0 <= code <= 0x30FF:
+        return True
+    # Hangul (Korean)
+    if 0xAC00 <= code <= 0xD7AF:
+        return True
+    # Fullwidth ASCII variants (！＂＃＄％＆等) and Halfwidth/Fullwidth Forms
+    if 0xFF00 <= code <= 0xFFEF:
+        return True
+    # General Punctuation (includes ·, –, —, ', ', ", " etc.)
+    if 0x2000 <= code <= 0x206F:
+        return True
+    # CJK Radicals Supplement
+    if 0x2E80 <= code <= 0x2EFF:
+        return True
+    # Kangxi Radicals
+    if 0x2F00 <= code <= 0x2FDF:
+        return True
+    # Enclosed CJK Letters and Months
+    if 0x3200 <= code <= 0x32FF:
+        return True
+    # CJK Compatibility
+    if 0x3300 <= code <= 0x33FF:
+        return True
+    # Vertical Forms
+    if 0xFE10 <= code <= 0xFE1F:
+        return True
+    # CJK Compatibility Forms
+    if 0xFE30 <= code <= 0xFE4F:
+        return True
+    # Small Form Variants
+    if 0xFE50 <= code <= 0xFE6F:
+        return True
+    # Halfwidth and Fullwidth Forms (extra)
+    if 0xFFE0 <= code <= 0xFFEF:
+        return True
+    # Mathematical symbols that may need special handling (×, ÷, etc.)
+    if code == 0x00D7 or code == 0x00F7:  # × ÷
+        return True
+    return False
 
 
 def detect_color_mean(pixels: np.ndarray) -> tuple:
@@ -312,6 +371,7 @@ def render_latex_to_bytes_with_size(latex_formula: str, fontsize: int = 20, dpi:
 def calculate_text_dimensions(text: str, fontname: str, fontsize: float, max_width: float) -> tuple:
     """
     Calculate dimensions of text when rendered with wrapping.
+    Simulates the actual line-breaking logic used in render_mixed_content.
 
     Args:
         text: Text to measure
@@ -325,19 +385,63 @@ def calculate_text_dimensions(text: str, fontname: str, fontsize: float, max_wid
     if not text:
         return 0, 0, 0
 
-    text_width = fitz.get_text_length(text, fontname=fontname, fontsize=fontsize)
+    # Check if text contains CJK characters
+    # This determines which font will be used for rendering
+    has_cjk = any(is_cjk_char(ch) for ch in text)
 
-    if text_width <= max_width:
-        num_lines = 1
-        actual_width = text_width
-    else:
-        num_lines = int(text_width / max_width) + 1
-        actual_width = max_width
+    # Character width function matching render_mixed_content logic
+    def get_char_width(ch):
+        if is_cjk_char(ch):
+            # Full-width characters (CJK ideographs, punctuation, etc.)
+            return fontsize * 1.0
+        elif has_cjk:
+            # When using CJK font for mixed text:
+            # Latin letters and numbers are rendered at ~0.5 fontsize width
+            if ch == ' ':
+                return fontsize * 0.35  # Space is narrower
+            elif ch in 'mwMW':
+                return fontsize * 0.7  # Wide letters
+            elif ch in 'il1!|':
+                return fontsize * 0.3  # Narrow characters
+            else:
+                return fontsize * 0.5  # Average half-width
+        else:
+            # Pure Latin text using helv font
+            return fitz.get_text_length(ch, fontname=fontname, fontsize=fontsize)
+
+    # Simulate line-by-line rendering
+    cursor_x = 0
+    num_lines = 1
+    max_line_width = 0
+
+    for ch in text:
+        # Handle newline
+        if ch == '\n':
+            max_line_width = max(max_line_width, cursor_x)
+            cursor_x = 0
+            num_lines += 1
+            continue
+
+        # Calculate character width
+        char_width = get_char_width(ch)
+
+        # Check if need to wrap
+        if cursor_x + char_width > max_width:
+            max_line_width = max(max_line_width, cursor_x)
+            cursor_x = 0
+            num_lines += 1
+            # Skip leading space on new line
+            if ch == ' ':
+                continue
+
+        cursor_x += char_width
+
+    max_line_width = max(max_line_width, cursor_x)
 
     line_spacing = 1.2
     total_height = num_lines * fontsize * line_spacing
 
-    return actual_width, total_height, num_lines
+    return max_line_width, total_height, num_lines
 
 
 def calculate_adaptive_font_size(text: str, bbox: fitz.Rect,
@@ -408,6 +512,25 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
     else:
         text_color = (1, 1, 1)  # White text on dark background
 
+    # Check if text contains CJK characters and load appropriate font
+    has_cjk = any(is_cjk_char(ch) for ch in text)
+    cjk_fontname = None
+    cjk_fontfile = None
+
+    if has_cjk:
+        # Try to find a CJK font
+        import os
+        cjk_font_paths = [
+            "C:/Windows/Fonts/msyh.ttc",      # Microsoft YaHei
+            "C:/Windows/Fonts/simsun.ttc",    # SimSun
+            "C:/Windows/Fonts/simhei.ttf",    # SimHei
+        ]
+        for font_path in cjk_font_paths:
+            if os.path.exists(font_path):
+                cjk_fontfile = font_path
+                cjk_fontname = "cjk-font"
+                break
+
     # Minimal margins
     margin_x = 1  # Horizontal margin
     margin_y = 1  # Vertical margin
@@ -422,9 +545,23 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
     cstk_x = cursor_x  # Starting x position of buffer
 
     def flush_buffer():
-        """Output the character buffer to PDF."""
+        """Output the character buffer to PDF using appropriate font."""
         nonlocal cstk, cursor_x, cstk_x
-        if cstk:
+        if not cstk:
+            return
+
+        # When we have CJK content, use CJK font for ALL characters
+        # This ensures consistent appearance for mixed text
+        if has_cjk and cjk_fontfile:
+            page.insert_text(
+                point=(cstk_x, cursor_y),
+                text=cstk,
+                fontsize=fontsize,
+                fontname=cjk_fontname,
+                fontfile=cjk_fontfile,
+                color=text_color
+            )
+        else:
             page.insert_text(
                 point=(cstk_x, cursor_y),
                 text=cstk,
@@ -432,11 +569,30 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                 fontname=fontname,
                 color=text_color
             )
-            cstk = ""
-            # Note: cstk_x is NOT updated here - it will be set when starting a new buffer
 
-    # Pre-calculate space width for efficiency
-    space_width = fitz.get_text_length(' ', fontname=fontname, fontsize=fontsize)
+        cstk = ""
+
+    # Character width calculation function
+    # When using CJK font, all characters are rendered with that font
+    # CJK chars = full-width, Latin/numbers = half-width (approximately)
+    def get_char_width(ch):
+        if is_cjk_char(ch):
+            # Full-width characters (CJK ideographs, punctuation, etc.)
+            return fontsize * 1.0
+        elif has_cjk and cjk_fontfile:
+            # When using CJK font for mixed text:
+            # Latin letters and numbers are rendered at ~0.5 fontsize width
+            if ch == ' ':
+                return fontsize * 0.35  # Space is narrower
+            elif ch in 'mwMW':
+                return fontsize * 0.7  # Wide letters
+            elif ch in 'il1!|':
+                return fontsize * 0.3  # Narrow characters
+            else:
+                return fontsize * 0.5  # Average half-width
+        else:
+            # Pure Latin text using helv font
+            return fitz.get_text_length(ch, fontname=fontname, fontsize=fontsize)
 
     for seg_type, content in segments:
         if seg_type == 'text':
@@ -450,14 +606,7 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                     cstk_x = cursor_x
                     continue
                 # Calculate character width
-                if ch == ' ':
-                    char_width = space_width
-                elif is_cjk_char(ch):
-                    # CJK characters are typically 1em wide
-                    char_width = fontsize * 1.0
-                else:
-                    # Latin and other characters
-                    char_width = fitz.get_text_length(ch, fontname=fontname, fontsize=fontsize)
+                char_width = get_char_width(ch)
 
                 # Check if character fits on current line
                 if cursor_x + char_width > max_x:
@@ -923,10 +1072,12 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
                     if translated_text != text:
                         modified_text = translated_text
                         print(f"    [翻译] 元素 {elem_idx + 1}: OK")
+                        print(f"      原文: {text[:80]}{'...' if len(text) > 80 else ''}")
+                        print(f"      译文: {translated_text[:80]}{'...' if len(translated_text) > 80 else ''}")
 
-                # Calculate adaptive font size
+                # Calculate adaptive font size based on the FINAL text (after translation)
                 text_only = re.sub(r'\$.*?\$', 'FORMULA', modified_text)
-                fontsize = calculate_adaptive_font_size(text_only, rect, default_size=12, min_size=4)
+                fontsize = calculate_adaptive_font_size(text_only, rect, default_size=12, min_size=3)
 
                 # Render mixed content with auto color adaptation
                 render_mixed_content(page, modified_text, rect, fontsize, bg_color_rgb=bg_color)
