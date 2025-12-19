@@ -1,0 +1,76 @@
+{
+    "page_index": 6,
+    "elements": [
+        {
+            "bbox": [
+                295.0,
+                194.0,
+                1414.0,
+                314.0
+            ],
+            "category": "Caption",
+            "text": "Table 1: **Generative model family comparison on class-conditional ImageNet 256×256.** “↓” or “↑” indicate lower or higher values are better. Metrics include Fréchet inception distance (FID), inception score (IS), precision (Pre) and recall (rec). “#Step”: the number of model runs needed to generate an image. Wall-clock inference time relative to VAR is reported. Models with the suffix “-re” used rejection sampling. †: taken from MaskGIT [17]."
+        },
+        {
+            "bbox": [
+                346.0,
+                320.0,
+                1355.0,
+                1195.0
+            ],
+            "category": "Table",
+            "text": "<table><thead><tr><th>Type</th><th>Model</th><th>FID↓</th><th>IS↑</th><th>Pre↑</th><th>Rec↑</th><th>#Para</th><th>#Step</th><th>Time</th></tr></thead><tbody><tr><td>GAN</td><td>BigGAN [13]</td><td>6.95</td><td>224.5</td><td><strong>0.89</strong></td><td>0.38</td><td>112M</td><td>1</td><td>—</td></tr><tr><td>GAN</td><td>GigaGAN [42]</td><td>3.45</td><td>225.5</td><td>0.84</td><td><strong>0.61</strong></td><td>569M</td><td>1</td><td>—</td></tr><tr><td>GAN</td><td>StyleGan-XL [74]</td><td>2.30</td><td>265.1</td><td>0.78</td><td>0.53</td><td>166M</td><td>1</td><td>0.3 [74]</td></tr><tr><td>Diff.</td><td>ADM [26]</td><td>10.94</td><td>101.0</td><td>0.69</td><td>0.63</td><td>554M</td><td>250</td><td>168 [74]</td></tr><tr><td>Diff.</td><td>CDM [36]</td><td>4.88</td><td>158.7</td><td>—</td><td>—</td><td>—</td><td>8100</td><td>—</td></tr><tr><td>Diff.</td><td>LDM-4-G [70]</td><td>3.60</td><td>247.7</td><td>—</td><td>—</td><td>400M</td><td>250</td><td>—</td></tr><tr><td>Diff.</td><td>DiT-L/2 [63]</td><td>5.02</td><td>167.2</td><td>0.75</td><td>0.57</td><td>458M</td><td>250</td><td>31</td></tr><tr><td>Diff.</td><td>DiT-XL/2 [63]</td><td>2.27</td><td>278.2</td><td>0.83</td><td>0.57</td><td>675M</td><td>250</td><td>45</td></tr><tr><td>Diff.</td><td>L-DiT-3B [3]</td><td>2.10</td><td>304.4</td><td>0.82</td><td>0.60</td><td>3.0B</td><td>250</td><td>>45</td></tr><tr><td>Diff.</td><td>L-DiT-7B [3]</td><td>2.28</td><td>316.2</td><td>0.83</td><td>0.58</td><td>7.0B</td><td>250</td><td>>45</td></tr><tr><td>Mask.</td><td>MaskGIT [17]</td><td>6.18</td><td>182.1</td><td>0.80</td><td>0.51</td><td>227M</td><td>8</td><td>0.5 [17]</td></tr><tr><td>Mask.</td><td>RCG (cond.) [51]</td><td>3.49</td><td>215.5</td><td>—</td><td>—</td><td>502M</td><td>20</td><td>1.9 [51]</td></tr><tr><td>AR</td><td>VQVAE-2<sup>†</sup> [68]</td><td>31.11</td><td>~45</td><td>0.36</td><td>0.57</td><td>13.5B</td><td>5120</td><td>—</td></tr><tr><td>AR</td><td>VQGAN<sup>†</sup> [30]</td><td>18.65</td><td>80.4</td><td>0.78</td><td>0.26</td><td>227M</td><td>256</td><td>19 [17]</td></tr><tr><td>AR</td><td>VQGAN [30]</td><td>15.78</td><td>74.3</td><td>—</td><td>—</td><td>1.4B</td><td>256</td><td>24</td></tr><tr><td>AR</td><td>VQGAN-re [30]</td><td>5.20</td><td>280.3</td><td>—</td><td>—</td><td>1.4B</td><td>256</td><td>24</td></tr><tr><td>AR</td><td>ViTVQ [92]</td><td>4.17</td><td>175.1</td><td>—</td><td>—</td><td>1.7B</td><td>1024</td><td>>24</td></tr><tr><td>AR</td><td>ViTVQ-re [92]</td><td>3.04</td><td>227.4</td><td>—</td><td>—</td><td>1.7B</td><td>1024</td><td>>24</td></tr><tr><td>AR</td><td>RQTran. [50]</td><td>7.55</td><td>134.0</td><td>—</td><td>—</td><td>3.8B</td><td>68</td><td>21</td></tr><tr><td>AR</td><td>RQTran.-re [50]</td><td>3.80</td><td>323.7</td><td>—</td><td>—</td><td>3.8B</td><td>68</td><td>21</td></tr><tr><td>VAR</td><td>VAR-d16</td><td>3.30</td><td>274.4</td><td>0.84</td><td>0.51</td><td>310M</td><td>10</td><td>0.4</td></tr><tr><td>VAR</td><td>VAR-d20</td><td>2.57</td><td>302.6</td><td>0.83</td><td>0.56</td><td>600M</td><td>10</td><td>0.5</td></tr><tr><td>VAR</td><td>VAR-d24</td><td>2.09</td><td>312.9</td><td>0.82</td><td>0.59</td><td>1.0B</td><td>10</td><td>0.6</td></tr><tr><td>VAR</td><td>VAR-d30</td><td>1.92</td><td>323.1</td><td>0.82</td><td>0.59</td><td>2.0B</td><td>10</td><td>1</td></tr><tr><td>VAR</td><td>VAR-d30-re<br>(validation data)</td><td><strong>1.73</strong></td><td><strong>350.2</strong></td><td>0.82</td><td>0.60</td><td>2.0B</td><td>10</td><td>1</td></tr></tbody></table>"
+        },
+        {
+            "bbox": [
+                295.0,
+                1250.0,
+                1414.0,
+                1528.0
+            ],
+            "category": "Text",
+            "text": "**Overall comparison.** In comparison with existing generative approaches including generative adversarial networks (GAN), diffusion models (Diff.), BERT-style masked-prediction models (Mask.), and GPT-style autoregressive models (AR), our visual autoregressive (VAR) establishes a new model class. As shown in Tab. 1, VAR not only achieves the best FID/IS but also demonstrates remarkable speed in image generation. VAR also maintains decent precision and recall, confirming its semantic consistency. These advantages hold true on the 512×512 synthesis benchmark, as detailed in Tab. 2. Notably, VAR significantly advances traditional AR capabilities. To our knowledge, this is the first time of autoregressive models outperforming Diffusion transformers, a milestone made possible by VAR’s resolution of AR limitations discussed in Section 3."
+        },
+        {
+            "bbox": [
+                295.0,
+                1539.0,
+                844.0,
+                1973.0
+            ],
+            "category": "Text",
+            "text": "**Efficiency comparison.** Conventional autoregressive (AR) models [30, 68, 92, 50] suffer a lot from the high computational cost, as the number of image tokens is quadratic to the image resolution. A full autoregressive generation of $n^2$ tokens requires $O(n^2)$ decoding iterations and $O(n^6)$ total computations. In contrast, VAR only requires $O(\\log(n))$ iterations and $O(n^4)$ total computations. The wall-clock time reported in Tab. 1 also provides empirical evidence that VAR is around 20 times faster than VQGAN and ViT-VQGAN even with more model parameters, reaching the speed of efficient GAN models which only require 1 step to generate an image."
+        },
+        {
+            "bbox": [
+                859.0,
+                1562.0,
+                1414.0,
+                1650.0
+            ],
+            "category": "Caption",
+            "text": "Table 2: **ImageNet 512×512 conditional generation.** †: quoted from MaskGIT [17]. “-s”: a single shared AdaLN layer is used due to resource limitation."
+        },
+        {
+            "bbox": [
+                860.0,
+                1658.0,
+                1412.0,
+                1953.0
+            ],
+            "category": "Table",
+            "text": "<table><thead><tr><th>Type</th><th>Model</th><th>FID↓</th><th>IS↑</th><th>Time</th></tr></thead><tbody><tr><td>GAN</td><td>BigGAN [13]</td><td>8.43</td><td>177.9</td><td>—</td></tr><tr><td>Diff.</td><td>ADM [26]</td><td>23.24</td><td>101.0</td><td>—</td></tr><tr><td>Diff.</td><td>DiT-XL/2 [63]</td><td>3.04</td><td>240.8</td><td>81</td></tr><tr><td>Mask.</td><td>MaskGIT [17]</td><td>7.32</td><td>156.0</td><td>0.5†</td></tr><tr><td>AR</td><td>VQGAN [30]</td><td>26.52</td><td>66.8</td><td>25†</td></tr><tr><td>VAR</td><td>VAR-d36-s</td><td><strong>2.63</strong></td><td><strong>303.2</strong></td><td>1</td></tr></tbody></table>"
+        },
+        {
+            "bbox": [
+                295.0,
+                1984.0,
+                1414.0,
+                2083.0
+            ],
+            "category": "Text",
+            "text": "**Compared with popular diffusion transformer.** The VAR model surpasses the recently popular diffusion models Diffusion Transformer (DiT), which serves as the precursor to the latest Stable-Diffusion 3 [29] and SORA [14], in multiple dimensions: 1) In image generation diversity and quality"
+        }
+    ],
+    "created_at": 1765439481133
+}

@@ -1,8 +1,8 @@
 """
-Demo: Render HTML Table to PDF
+Demo: Render HTML Table to PDF using WeasyPrint
 
-This demo demonstrates how to parse an HTML table and render it on a PDF
-with proper formatting, borders, and text alignment.
+This demo demonstrates how to render an HTML table on a PDF
+with automatic column width calculation and proper scaling.
 
 Usage:
     python demos/demo_table_render.py
@@ -12,298 +12,25 @@ Output:
 """
 
 import fitz  # PyMuPDF
-from html.parser import HTMLParser
-import re
 from pathlib import Path
 from io import BytesIO
-from weasyprint import HTML, CSS
+from weasyprint import HTML
+import time
+import math
 
 
-class TableHTMLParser(HTMLParser):
-    """Parse HTML table structure and extract data"""
-
-    def __init__(self):
-        super().__init__()
-        self.headers = []
-        self.rows = []
-        self.current_row = []
-        self.current_cell = {'text': '', 'bold': False, 'sup': False}
-        self.in_header = False
-        self.in_tbody = False
-        self.in_cell = False
-        self.in_strong = False
-        self.in_sup = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag == 'thead':
-            self.in_header = True
-        elif tag == 'tbody':
-            self.in_tbody = True
-        elif tag == 'tr':
-            self.current_row = []
-        elif tag in ['th', 'td']:
-            self.in_cell = True
-            self.current_cell = {'text': '', 'bold': False, 'sup': False}
-        elif tag == 'strong':
-            self.in_strong = True
-            self.current_cell['bold'] = True
-        elif tag == 'sup':
-            self.in_sup = True
-            self.current_cell['sup'] = True
-
-    def handle_data(self, data):
-        if self.in_cell and data.strip():
-            self.current_cell['text'] += data.strip()
-
-    def handle_endtag(self, tag):
-        if tag in ['th', 'td']:
-            self.in_cell = False
-            if self.in_header:
-                self.headers.append(self.current_cell['text'])
-            else:
-                self.current_row.append(self.current_cell)
-        elif tag == 'tr' and self.current_row:
-            self.rows.append(self.current_row)
-        elif tag == 'thead':
-            self.in_header = False
-        elif tag == 'tbody':
-            self.in_tbody = False
-        elif tag == 'strong':
-            self.in_strong = False
-        elif tag == 'sup':
-            self.in_sup = False
-
-    def get_table_data(self):
-        """Return parsed table data"""
-        return {
-            'headers': self.headers,
-            'rows': self.rows
-        }
-
-
-def is_numeric_text(text):
-    """Check if text is primarily numeric (for right alignment)"""
-    if not text:
-        return False
-    # Check if text matches number patterns: digits, dots, dashes, daggers
-    return bool(re.match(r'^[\d.—†\-]+$', text))
-
-
-def render_table(page, bbox, table_html, fontsize=10):
+def _render_table_to_pdf(table_html, width, height, fontsize, line_height, padding):
     """
-    Render HTML table on PDF page
-
-    Args:
-        page: fitz.Page object
-        bbox: Tuple of (x0, y0, x1, y1) coordinates
-        table_html: HTML table string
-        fontsize: Base font size for table text
+    内部函数：渲染HTML表格为PDF并返回文档和内容边界
     """
-    # Parse HTML table
-    parser = TableHTMLParser()
-    parser.feed(table_html)
-    table_data = parser.get_table_data()
+    # ============================================================
+    # 表格样式配置（在这里修改颜色）
+    # ============================================================
+    bg_color = "#000000"      # 背景颜色：黑色
+    text_color = "#ffffff"    # 文本颜色：白色
+    border_color = "#ffffff"  # 边框颜色：白色
+    # ============================================================
 
-    headers = table_data['headers']
-    rows = table_data['rows']
-
-    if not headers:
-        print("Warning: No headers found in table")
-        return
-
-    # Try to find a Unicode-capable font on the system
-    # Priority: fonts with best Unicode coverage for arrows and special chars
-    font_candidates = [
-        "C:/Windows/Fonts/seguisym.ttf",        # Segoe UI Symbol (best for symbols)
-        "C:/Windows/Fonts/arialuni.ttf",        # Arial Unicode MS
-        "C:/Windows/Fonts/msgothic.ttc",        # MS Gothic (good Unicode)
-        "C:/Windows/Fonts/arial.ttf",           # Arial (basic)
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
-        "/System/Library/Fonts/Helvetica.ttc",  # macOS
-    ]
-
-    fontfile = None
-    loaded_font = None
-    for font_path in font_candidates:
-        if Path(font_path).exists():
-            try:
-                # Try to load font using PyMuPDF's Font class for better embedding
-                loaded_font = fitz.Font(fontfile=font_path)
-                fontfile = font_path
-                print(f"Using font: {font_path}")
-                break
-            except Exception as e:
-                print(f"Failed to load {font_path}: {e}")
-                continue
-
-    if fontfile is None:
-        print("Warning: No Unicode font found, using fallback font")
-        # Try using a built-in CJK font which often has better Unicode coverage
-        try:
-            loaded_font = fitz.Font("cjk")
-            print("Using built-in CJK font")
-        except:
-            loaded_font = None
-
-    # Calculate dimensions
-    x0, y0, x1, y1 = bbox
-    width = x1 - x0
-    height = y1 - y0
-
-    num_cols = len(headers)
-    num_rows = len(rows) + 1  # +1 for header row
-
-    col_width = width / num_cols
-    row_height = height / num_rows
-
-    # Header font size (slightly larger)
-    header_fontsize = fontsize + 1
-
-    print(f"\n{'='*80}")
-    print(f"Table Rendering Info:")
-    print(f"  Columns: {num_cols}")
-    print(f"  Rows: {num_rows} (including header)")
-    print(f"  Column width: {col_width:.1f}pt")
-    print(f"  Row height: {row_height:.1f}pt")
-    print(f"  Font size: {fontsize}pt")
-    print(f"{'='*80}\n")
-
-    # Render header row with background
-    print("Rendering header row...")
-    for col_idx, header in enumerate(headers):
-        cell_x0 = x0 + col_idx * col_width
-        cell_y0 = y0
-        cell_x1 = cell_x0 + col_width
-        cell_y1 = cell_y0 + row_height
-
-        # Draw cell border (no background fill)
-        header_rect = fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1)
-        page.draw_rect(header_rect, color=(0, 0, 0), width=0.5)
-
-        # Draw header text (centered, bold) using loaded font for Unicode support
-        if loaded_font:
-            # Use loaded font with insert_text for proper Unicode rendering
-            text_x = cell_x0 + col_width / 2
-            text_y = cell_y0 + row_height / 2 + header_fontsize / 3
-
-            # Center the text
-            text_width = loaded_font.text_length(header, fontsize=header_fontsize)
-            text_x = cell_x0 + (col_width - text_width) / 2
-
-            # Use fontfile parameter with the font path
-            # Remove spaces from font name as PyMuPDF doesn't accept them
-            safe_fontname = loaded_font.name.replace(" ", "")
-            page.insert_text(
-                point=(text_x, text_y),
-                text=header,
-                fontname=safe_fontname,
-                fontfile=fontfile,
-                fontsize=header_fontsize,
-                color=(0, 0, 0)
-            )
-        else:
-            # Fall back to textbox
-            text_rect = fitz.Rect(cell_x0 + 2, cell_y0, cell_x1 - 2, cell_y1)
-            page.insert_textbox(
-                text_rect,
-                header,
-                fontsize=header_fontsize,
-                fontname="helv",
-                align=fitz.TEXT_ALIGN_CENTER,
-                color=(0, 0, 0)
-            )
-
-    # Render data rows
-    print(f"Rendering {len(rows)} data rows...")
-    for row_idx, row in enumerate(rows):
-        for col_idx, cell in enumerate(row):
-            cell_x0 = x0 + col_idx * col_width
-            cell_y0 = y0 + (row_idx + 1) * row_height
-            cell_x1 = cell_x0 + col_width
-            cell_y1 = cell_y0 + row_height
-
-            # Draw cell border
-            cell_rect = fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1)
-            page.draw_rect(cell_rect, color=(0, 0, 0), width=0.5)
-
-            # Get cell text and properties
-            text = cell['text']
-            is_bold = cell['bold']
-
-            # Color: black for bold, dark gray for normal
-            color = (0, 0, 0) if is_bold else (0.2, 0.2, 0.2)
-
-            # Insert text using loaded font for better Unicode support
-            if loaded_font:
-                # Use loaded font with insert_text for proper Unicode rendering
-                # Calculate text position based on alignment
-                if is_numeric_text(text):
-                    # Right align numbers
-                    text_width = loaded_font.text_length(text, fontsize=fontsize)
-                    text_x = cell_x1 - text_width - 3
-                else:
-                    # Left align text
-                    text_x = cell_x0 + 3
-
-                text_y = cell_y0 + row_height / 2 + fontsize / 3
-
-                # Use fontfile parameter with the font path
-                # Remove spaces from font name as PyMuPDF doesn't accept them
-                safe_fontname = loaded_font.name.replace(" ", "")
-                page.insert_text(
-                    point=(text_x, text_y),
-                    text=text,
-                    fontname=safe_fontname,
-                    fontfile=fontfile,
-                    fontsize=fontsize,
-                    color=color
-                )
-            else:
-                # Fall back to textbox
-                if is_numeric_text(text):
-                    text_rect = fitz.Rect(cell_x0 + 2, cell_y0, cell_x1 - 3, cell_y1)
-                    align = fitz.TEXT_ALIGN_RIGHT
-                else:
-                    text_rect = fitz.Rect(cell_x0 + 3, cell_y0, cell_x1 - 2, cell_y1)
-                    align = fitz.TEXT_ALIGN_LEFT
-
-                page.insert_textbox(
-                    text_rect,
-                    text,
-                    fontsize=fontsize,
-                    fontname="helv",
-                    align=align,
-                    color=color
-                )
-
-    print("[OK] Table rendering complete\n")
-
-
-def render_table_with_weasyprint(page, bbox, table_html, fontsize=10):
-    """
-    使用WeasyPrint渲染HTML表格到PDF页面的指定区域
-
-    利用浏览器引擎自动计算列宽，实现内容自适应布局。
-
-    Args:
-        page: fitz.Page对象
-        bbox: Tuple of (x0, y0, x1, y1) 目标区域坐标
-        table_html: HTML表格字符串
-        fontsize: 基础字体大小 (pt)
-    """
-    x0, y0, x1, y1 = bbox
-    width = x1 - x0
-    height = y1 - y0
-
-    print(f"\n{'='*80}")
-    print(f"WeasyPrint Table Rendering:")
-    print(f"  Target bbox: ({x0:.1f}, {y0:.1f}, {x1:.1f}, {y1:.1f})")
-    print(f"  Size: {width:.1f} x {height:.1f} pt")
-    print(f"  Font size: {fontsize}pt")
-    print(f"{'='*80}\n")
-
-    # 构建完整的HTML文档，包含CSS样式
-    # 使用table-layout: auto让浏览器自动计算列宽
     full_html = f"""
     <!DOCTYPE html>
     <html>
@@ -311,7 +38,7 @@ def render_table_with_weasyprint(page, bbox, table_html, fontsize=10):
         <meta charset="UTF-8">
         <style>
             @page {{
-                size: {width}pt {height * 3}pt;  /* 给足够高度，稍后裁剪 */
+                size: {width}pt {height * 3}pt;
                 margin: 0;
             }}
             body {{
@@ -321,28 +48,33 @@ def render_table_with_weasyprint(page, bbox, table_html, fontsize=10):
             }}
             table {{
                 width: {width}pt;
+                max-width: {width}pt;
                 border-collapse: collapse;
                 font-size: {fontsize}pt;
-                table-layout: auto;  /* 关键：自动计算列宽 */
+                table-layout: fixed;
+                background-color: {bg_color};
+                color: {text_color};
             }}
             th, td {{
-                border: 0.5pt solid black;
-                padding: 4pt 6pt;
+                border: 0.5pt solid {border_color};
+                padding: {padding}pt;
                 text-align: left;
                 vertical-align: middle;
                 word-wrap: break-word;
+                word-break: break-word;
+                overflow-wrap: break-word;
+                overflow: hidden;
+                line-height: {line_height};
             }}
             th {{
                 font-weight: bold;
-                background-color: #f5f5f5;
             }}
-            /* 数字右对齐 */
             td:nth-child(n+3) {{
                 text-align: right;
             }}
             strong {{
                 font-weight: bold;
-                color: #000;
+                color: {text_color};
             }}
         </style>
     </head>
@@ -350,50 +82,120 @@ def render_table_with_weasyprint(page, bbox, table_html, fontsize=10):
     </html>
     """
 
-    # 使用WeasyPrint渲染为PDF字节流
-    print("  Rendering HTML with WeasyPrint...")
     pdf_bytes = BytesIO()
     HTML(string=full_html).write_pdf(pdf_bytes)
     pdf_bytes.seek(0)
 
-    # 用PyMuPDF打开渲染后的PDF
     temp_doc = fitz.open(stream=pdf_bytes.read(), filetype="pdf")
     temp_page = temp_doc[0]
 
-    # 获取实际渲染内容的边界（去除空白）
-    # 使用get_text("dict")获取文本块来确定实际内容区域
-    src_rect = temp_page.rect
+    # 获取表格的实际边界
+    content_rects = []
+    drawings = temp_page.get_drawings()
+    for d in drawings:
+        content_rects.append(d["rect"])
 
-    # 计算缩放比例，使表格适配目标bbox
-    # 优先保证宽度适配，高度按比例缩放
-    scale_x = width / src_rect.width if src_rect.width > 0 else 1
-    scale_y = height / src_rect.height if src_rect.height > 0 else 1
+    text_dict = temp_page.get_text("dict")
+    for block in text_dict.get("blocks", []):
+        if "bbox" in block:
+            content_rects.append(fitz.Rect(block["bbox"]))
 
-    # 使用较小的缩放比例，保证表格完全在bbox内
-    scale = min(scale_x, scale_y, 1.0)  # 不放大，只缩小
+    if content_rects:
+        min_x = min(r.x0 for r in content_rects)
+        min_y = min(r.y0 for r in content_rects)
+        max_x = max(r.x1 for r in content_rects)
+        max_y = max(r.y1 for r in content_rects)
+        content_rect = fitz.Rect(min_x, min_y, max_x, max_y)
+    else:
+        content_rect = temp_page.rect
 
-    # 计算实际渲染尺寸
-    actual_width = src_rect.width * scale
-    actual_height = src_rect.height * scale
+    return temp_doc, content_rect
 
-    # 计算目标矩形（居中或左上对齐）
-    # 这里使用左上对齐
-    target_rect = fitz.Rect(
-        x0,
-        y0,
-        x0 + actual_width,
-        y0 + actual_height
+
+def render_table_with_weasyprint(page, bbox, table_html, fontsize=None):
+    """
+    使用WeasyPrint渲染HTML表格到PDF页面的指定区域
+
+    高效自适应算法：只渲染2次，根据首次渲染结果直接计算最优字号。
+
+    Args:
+        page: fitz.Page对象
+        bbox: Tuple of (x0, y0, x1, y1) 目标区域坐标
+        table_html: HTML表格字符串
+        fontsize: 基础字体大小 (pt)，如果为None则自动计算
+    """
+    x0, y0, x1, y1 = bbox
+    width = x1 - x0
+    height = y1 - y0
+
+    print(f"\n{'='*80}")
+    print(f"WeasyPrint Table Rendering:")
+    print(f"  Target bbox: ({x0:.1f}, {y0:.1f}, {x1:.1f}, {y1:.1f})")
+    print(f"  Size: {width:.1f} x {height:.1f} pt")
+    print(f"{'='*80}\n")
+
+    start_time = time.time()
+
+    # 初始参数
+    init_fontsize = fontsize if fontsize else 10.0
+    line_height = 1.2
+    padding = 2.0
+
+    # 第1次渲染：获取初始大小
+    print("  Pass 1: Measuring table size...")
+    temp_doc, content_rect = _render_table_to_pdf(
+        table_html, width, height, init_fontsize, line_height, padding
     )
 
-    print(f"  Source size: {src_rect.width:.1f} x {src_rect.height:.1f} pt")
-    print(f"  Scale factor: {scale:.3f}")
-    print(f"  Actual rendered size: {actual_width:.1f} x {actual_height:.1f} pt")
+    scale_x = width / content_rect.width if content_rect.width > 0 else 1
+    scale_y = height / content_rect.height if content_rect.height > 0 else 1
+    scale = min(scale_x, scale_y, 1.0)
+
+    print(f"    fontsize={init_fontsize:.1f}pt -> content={content_rect.width:.0f}x{content_rect.height:.0f}, scale={scale:.3f}")
+
+    # 如果表格刚好能放入bbox（scale在0.90-1.0之间），直接使用
+    if 0.90 <= scale <= 1.0:
+        final_doc = temp_doc
+        final_rect = content_rect
+        final_fontsize = init_fontsize
+    else:
+        temp_doc.close()
+
+        # 计算最优字号，让表格刚好填满bbox
+        # 字号与表格高度关系近似平方根（不是线性）
+        # 使用 sqrt(scale) 来调整字号，更接近实际
+        optimal_fontsize = init_fontsize * math.sqrt(scale) * 0.95  # 留5%余量
+        optimal_line_height = max(1.0, 1.0 + (line_height - 1.0) * math.sqrt(scale))
+        optimal_padding = max(0.5, padding * math.sqrt(scale))
+
+        # 第2次渲染：使用优化后的参数
+        print(f"  Pass 2: Optimized rendering...")
+        final_doc, final_rect = _render_table_to_pdf(
+            table_html, width, height, optimal_fontsize, optimal_line_height, optimal_padding
+        )
+        final_fontsize = optimal_fontsize
+
+        scale_x = width / final_rect.width if final_rect.width > 0 else 1
+        scale_y = height / final_rect.height if final_rect.height > 0 else 1
+        scale = min(scale_x, scale_y, 1.0)
+
+        print(f"    fontsize={optimal_fontsize:.1f}pt -> content={final_rect.width:.0f}x{final_rect.height:.0f}, scale={scale:.3f}")
+
+    # 计算最终渲染尺寸
+    actual_width = final_rect.width * scale
+    actual_height = final_rect.height * scale
+    target_rect = fitz.Rect(x0, y0, x0 + actual_width, y0 + actual_height)
+
+    print(f"\n  Final: fontsize={final_fontsize:.1f}pt, scale={scale:.3f}")
+    print(f"  Rendered size: {actual_width:.1f} x {actual_height:.1f} pt")
 
     # 将渲染结果嵌入到目标页面
-    page.show_pdf_page(target_rect, temp_doc, 0)
+    page.show_pdf_page(target_rect, final_doc, 0, clip=final_rect)
 
-    temp_doc.close()
-    print("[OK] WeasyPrint table rendering complete\n")
+    final_doc.close()
+
+    elapsed_time = time.time() - start_time
+    print(f"[OK] WeasyPrint table rendering complete (耗时: {elapsed_time:.3f}s)\n")
 
 
 def main():
@@ -406,156 +208,58 @@ def main():
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
 
-    # Create PDF document
-    doc = fitz.open()
-    page = doc.new_page(width=595, height=842)  # A4 size
+    # 用户提供的表格数据
+    table_data = {
+        "bbox": [346.0, 320.0, 1355.0, 1195.0],
+        "text": """<table><thead><tr><th>Type</th><th>Model</th><th>FID↓</th><th>IS↑</th><th>Pre↑</th><th>Rec↑</th><th>#Para</th><th>#Step</th><th>Time</th></tr></thead><tbody><tr><td>GAN</td><td>BigGAN [13]</td><td>6.95</td><td>224.5</td><td><strong>0.89</strong></td><td>0.38</td><td>112M</td><td>1</td><td>—</td></tr><tr><td>GAN</td><td>GigaGAN [42]</td><td>3.45</td><td>225.5</td><td>0.84</td><td><strong>0.61</strong></td><td>569M</td><td>1</td><td>—</td></tr><tr><td>GAN</td><td>StyleGan-XL [74]</td><td>2.30</td><td>265.1</td><td>0.78</td><td>0.53</td><td>166M</td><td>1</td><td>0.3 [74]</td></tr><tr><td>Diff.</td><td>ADM [26]</td><td>10.94</td><td>101.0</td><td>0.69</td><td>0.63</td><td>554M</td><td>250</td><td>168 [74]</td></tr><tr><td>Diff.</td><td>CDM [36]</td><td>4.88</td><td>158.7</td><td>—</td><td>—</td><td>—</td><td>8100</td><td>—</td></tr><tr><td>Diff.</td><td>LDM-4-G [70]</td><td>3.60</td><td>247.7</td><td>—</td><td>—</td><td>400M</td><td>250</td><td>—</td></tr><tr><td>Diff.</td><td>DiT-L/2 [63]</td><td>5.02</td><td>167.2</td><td>0.75</td><td>0.57</td><td>458M</td><td>250</td><td>31</td></tr><tr><td>Diff.</td><td>DiT-XL/2 [63]</td><td>2.27</td><td>278.2</td><td>0.83</td><td>0.57</td><td>675M</td><td>250</td><td>45</td></tr><tr><td>Diff.</td><td>L-DiT-3B [3]</td><td>2.10</td><td>304.4</td><td>0.82</td><td>0.60</td><td>3.0B</td><td>250</td><td>>45</td></tr><tr><td>Diff.</td><td>L-DiT-7B [3]</td><td>2.28</td><td>316.2</td><td>0.83</td><td>0.58</td><td>7.0B</td><td>250</td><td>>45</td></tr><tr><td>Mask.</td><td>MaskGIT [17]</td><td>6.18</td><td>182.1</td><td>0.80</td><td>0.51</td><td>227M</td><td>8</td><td>0.5 [17]</td></tr><tr><td>Mask.</td><td>RCG (cond.) [51]</td><td>3.49</td><td>215.5</td><td>—</td><td>—</td><td>502M</td><td>20</td><td>1.9 [51]</td></tr><tr><td>AR</td><td>VQVAE-2<sup>†</sup> [68]</td><td>31.11</td><td>~45</td><td>0.36</td><td>0.57</td><td>13.5B</td><td>5120</td><td>—</td></tr><tr><td>AR</td><td>VQGAN<sup>†</sup> [30]</td><td>18.65</td><td>80.4</td><td>0.78</td><td>0.26</td><td>227M</td><td>256</td><td>19 [17]</td></tr><tr><td>AR</td><td>VQGAN [30]</td><td>15.78</td><td>74.3</td><td>—</td><td>—</td><td>1.4B</td><td>256</td><td>24</td></tr><tr><td>AR</td><td>VQGAN-re [30]</td><td>5.20</td><td>280.3</td><td>—</td><td>—</td><td>1.4B</td><td>256</td><td>24</td></tr><tr><td>AR</td><td>ViTVQ [92]</td><td>4.17</td><td>175.1</td><td>—</td><td>—</td><td>1.7B</td><td>1024</td><td>>24</td></tr><tr><td>AR</td><td>ViTVQ-re [92]</td><td>3.04</td><td>227.4</td><td>—</td><td>—</td><td>1.7B</td><td>1024</td><td>>24</td></tr><tr><td>AR</td><td>RQTran. [50]</td><td>7.55</td><td>134.0</td><td>—</td><td>—</td><td>3.8B</td><td>68</td><td>21</td></tr><tr><td>AR</td><td>RQTran.-re [50]</td><td>3.80</td><td>323.7</td><td>—</td><td>—</td><td>3.8B</td><td>68</td><td>21</td></tr><tr><td>VAR</td><td>VAR-d16</td><td>3.30</td><td>274.4</td><td>0.84</td><td>0.51</td><td>310M</td><td>10</td><td>0.4</td></tr><tr><td>VAR</td><td>VAR-d20</td><td>2.57</td><td>302.6</td><td>0.83</td><td>0.56</td><td>600M</td><td>10</td><td>0.5</td></tr><tr><td>VAR</td><td>VAR-d24</td><td>2.09</td><td>312.9</td><td>0.82</td><td>0.59</td><td>1.0B</td><td>10</td><td>0.6</td></tr><tr><td>VAR</td><td>VAR-d30</td><td>1.92</td><td>323.1</td><td>0.82</td><td>0.59</td><td>2.0B</td><td>10</td><td>1</td></tr><tr><td>VAR</td><td>VAR-d30-re<br>(validation data)</td><td><strong>1.73</strong></td><td><strong>350.2</strong></td><td>0.82</td><td>0.60</td><td>2.0B</td><td>10</td><td>1</td></tr></tbody></table>"""
+    }
 
-    # Add title to page 1 (before rendering tables)
-    page.insert_text(
-        point=(50, 30),
-        text="WeasyPrint Adaptive Table Rendering Demo",
-        fontsize=16,
-        fontname="helv",
-        color=(0, 0, 0)
-    )
+    # 解析bbox（从200dpi图像坐标转换为PDF坐标）
+    # PDF默认72dpi，图像200dpi，转换系数 = 72/200 = 0.36
+    dpi_scale = 72 / 200
+    img_x0, img_y0, img_x1, img_y1 = table_data["bbox"]
+    x0 = img_x0 * dpi_scale
+    y0 = img_y0 * dpi_scale
+    x1 = img_x1 * dpi_scale
+    y1 = img_y1 * dpi_scale
 
-    # Example 1: Simple table from your data
-    print("\nExample 1: VAR Model Comparison Table")
+    print(f"  Image coords (200dpi): [{img_x0}, {img_y0}, {img_x1}, {img_y1}]")
+    print(f"  PDF coords (72dpi):    [{x0:.1f}, {y0:.1f}, {x1:.1f}, {y1:.1f}]")
+
+    # 打开原始PDF
+    source_pdf_path = "test-source-table.pdf"
+    doc = fitz.open(source_pdf_path)
+    page = doc[0]
+
+    print(f"  Source PDF: {source_pdf_path}")
+    print(f"  PDF page size: {page.rect.width:.1f} x {page.rect.height:.1f} pt")
+
+    print("\nRendering table on original PDF...")
     print("-" * 80)
 
-    table_html_1 = """<table>
-<thead>
-<tr>
-<th>Type</th>
-<th>Model</th>
-<th>FID↓</th>
-<th>IS↑</th>
-<th>Time</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>GAN</td>
-<td>BigGAN [13]</td>
-<td>8.43</td>
-<td>177.9</td>
-<td>—</td>
-</tr>
-<tr>
-<td>Diff.</td>
-<td>ADM [26]</td>
-<td>23.24</td>
-<td>101.0</td>
-<td>—</td>
-</tr>
-<tr>
-<td>Diff.</td>
-<td>DiT-XL/2 [63]</td>
-<td>3.04</td>
-<td>240.8</td>
-<td>81</td>
-</tr>
-<tr>
-<td>Mask.</td>
-<td>MaskGIT [17]</td>
-<td>7.32</td>
-<td>156.0</td>
-<td>0.5†</td>
-</tr>
-<tr>
-<td>AR</td>
-<td>VQGAN [30]</td>
-<td>26.52</td>
-<td>66.8</td>
-<td>25†</td>
-</tr>
-<tr>
-<td>VAR</td>
-<td>VAR-d36-s</td>
-<td><strong>2.63</strong></td>
-<td><strong>303.2</strong></td>
-<td>1</td>
-</tr>
-</tbody>
-</table>"""
+    bbox = (x0, y0, x1, y1)
+    render_table_with_weasyprint(page, bbox, table_data["text"])  # 自动计算最优字号
 
-    # 使用WeasyPrint渲染 - 自动计算列宽
-    bbox_1 = (50, 50, 245, 250)  # Adjusted for A4 page
-    render_table_with_weasyprint(page, bbox_1, table_html_1, fontsize=9)
+    # 第二个表格
+    table_data_2 = {
+        "bbox": [860.0, 1658.0, 1412.0, 1953.0],
+        "text": """<table><thead><tr><th>Type</th><th>Model</th><th>FID↓</th><th>IS↑</th><th>Time</th></tr></thead><tbody><tr><td>GAN</td><td>BigGAN [13]</td><td>8.43</td><td>177.9</td><td>—</td></tr><tr><td>Diff.</td><td>ADM [26]</td><td>23.24</td><td>101.0</td><td>—</td></tr><tr><td>Diff.</td><td>DiT-XL/2 [63]</td><td>3.04</td><td>240.8</td><td>81</td></tr><tr><td>Mask.</td><td>MaskGIT [17]</td><td>7.32</td><td>156.0</td><td>0.5†</td></tr><tr><td>AR</td><td>VQGAN [30]</td><td>26.52</td><td>66.8</td><td>25†</td></tr><tr><td>VAR</td><td>VAR-d36-s</td><td><strong>2.63</strong></td><td><strong>303.2</strong></td><td>1</td></tr></tbody></table>"""
+    }
 
-    # Example 2: 内容不均匀的表格（测试自适应列宽）
-    print("\nExample 2: Uneven Content Table (Testing Adaptive Column Width)")
-    print("-" * 80)
+    img_x0_2, img_y0_2, img_x1_2, img_y1_2 = table_data_2["bbox"]
+    x0_2 = img_x0_2 * dpi_scale
+    y0_2 = img_y0_2 * dpi_scale
+    x1_2 = img_x1_2 * dpi_scale
+    y1_2 = img_y1_2 * dpi_scale
 
-    table_html_2 = """<table>
-<thead>
-<tr>
-<th>ID</th>
-<th>Description</th>
-<th>Value</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1</td>
-<td>This is a very long description that demonstrates how the column width adapts to content automatically</td>
-<td>42.5</td>
-</tr>
-<tr>
-<td>2</td>
-<td>Short text</td>
-<td><strong>99.9</strong></td>
-</tr>
-<tr>
-<td>3</td>
-<td>Medium length description here</td>
-<td>73.2</td>
-</tr>
-</tbody>
-</table>"""
+    print(f"\n  Table 2 - Image coords (200dpi): {table_data_2['bbox']}")
+    print(f"  Table 2 - PDF coords (72dpi): [{x0_2:.1f}, {y0_2:.1f}, {x1_2:.1f}, {y1_2:.1f}]")
 
-    bbox_2 = (50, 280, 245, 450)
-    render_table_with_weasyprint(page, bbox_2, table_html_2, fontsize=10)
-
-    # Example 3: 对比 - 使用原始平均分配方法
-    print("\nExample 3: Original Method (Equal Column Width) for Comparison")
-    print("-" * 80)
-
-    page2 = doc.new_page(width=595, height=842)  # 新页面
-
-    # 先添加所有标题文字（在渲染表格之前）
-    page2.insert_text(
-        point=(50, 30),
-        text="WeasyPrint (Adaptive Width):",
-        fontsize=12,
-        fontname="helv",
-        color=(0, 0, 0)
-    )
-    page2.insert_text(
-        point=(315, 30),
-        text="Original (Equal Width):",
-        fontsize=12,
-        fontname="helv",
-        color=(0, 0, 0)
-    )
-    page2.insert_text(
-        point=(150, 230),
-        text="Comparison: Adaptive vs Equal Width",
-        fontsize=14,
-        fontname="helv",
-        color=(0, 0, 0)
-    )
-
-    # 左边：WeasyPrint自适应
-    bbox_3a = (50, 50, 280, 200)
-    render_table_with_weasyprint(page2, bbox_3a, table_html_2, fontsize=8)
-
-    # 右边：原始平均分配
-    bbox_3b = (315, 50, 545, 200)
-    render_table(page2, bbox_3b, table_html_2, fontsize=8)
+    bbox_2 = (x0_2, y0_2, x1_2, y1_2)
+    render_table_with_weasyprint(page, bbox_2, table_data_2["text"])
 
     # Save PDF
-    output_path = output_dir / "demo_table_render.pdf"
+    output_path = output_dir / "test-table-rendered.pdf"
     doc.save(str(output_path))
     doc.close()
 
