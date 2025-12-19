@@ -9,7 +9,13 @@
       "Bash(python demos/demo_table_render.py:*)",
       "Bash(cat:*)",
       "Bash(python demo_table_render.py:*)",
-      "Bash(python demo_text_overlay.py:*)"
+      "Bash(python demo_text_overlay.py:*)",
+      "Bash(uv add:*)",
+      "Bash(where winget:*)",
+      "Bash(winget install:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(powershell -Command \"Invoke-WebRequest -Uri ''https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases/download/2022-01-04/gtk3-runtime-3.24.31-2022-01-04-ts-win64.exe'' -OutFile ''D:\\\\code\\\\ocr_demo\\\\gtk3-runtime-win64.exe'' -UseBasicParsing\")"
     ]
   }
 }

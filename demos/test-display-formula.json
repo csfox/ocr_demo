@@ -1,0 +1,41 @@
+{
+    "page_index": 0,
+    "elements": [
+        {
+            "bbox": [100, 80, 700, 130],
+            "category": "Title",
+            "text": "Display Formula Test"
+        },
+        {
+            "bbox": [100, 150, 700, 220],
+            "category": "Text",
+            "text": "Autoregressive models define the joint distribution of a sequence as:"
+        },
+        {
+            "bbox": [100, 240, 700, 320],
+            "category": "Formula",
+            "text": "$$p(x_1, x_2, \\dots, x_T) = \\prod_{t=1}^{T} p(x_t | x_1, x_2, \\dots, x_{t-1})$$"
+        },
+        {
+            "bbox": [100, 340, 700, 410],
+            "category": "Text",
+            "text": "where each token is predicted based on all previous tokens."
+        },
+        {
+            "bbox": [100, 430, 700, 530],
+            "category": "Formula",
+            "text": "$$\\mathcal{L} = -\\sum_{t=1}^{T} \\log p(x_t | x_{<t})$$"
+        },
+        {
+            "bbox": [100, 550, 700, 620],
+            "category": "Text",
+            "text": "The quadratic formula with equation number is:"
+        },
+        {
+            "bbox": [100, 640, 700, 740],
+            "category": "Formula",
+            "text": "$$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a} \\qquad (1)$$"
+        }
+    ],
+    "created_at": 1765439481133
+}

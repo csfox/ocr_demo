@@ -15,6 +15,8 @@ import fitz  # PyMuPDF
 from html.parser import HTMLParser
 import re
 from pathlib import Path
+from io import BytesIO
+from weasyprint import HTML, CSS
 
 
 class TableHTMLParser(HTMLParser):
@@ -277,6 +279,123 @@ def render_table(page, bbox, table_html, fontsize=10):
     print("[OK] Table rendering complete\n")
 
 
+def render_table_with_weasyprint(page, bbox, table_html, fontsize=10):
+    """
+    使用WeasyPrint渲染HTML表格到PDF页面的指定区域
+
+    利用浏览器引擎自动计算列宽，实现内容自适应布局。
+
+    Args:
+        page: fitz.Page对象
+        bbox: Tuple of (x0, y0, x1, y1) 目标区域坐标
+        table_html: HTML表格字符串
+        fontsize: 基础字体大小 (pt)
+    """
+    x0, y0, x1, y1 = bbox
+    width = x1 - x0
+    height = y1 - y0
+
+    print(f"\n{'='*80}")
+    print(f"WeasyPrint Table Rendering:")
+    print(f"  Target bbox: ({x0:.1f}, {y0:.1f}, {x1:.1f}, {y1:.1f})")
+    print(f"  Size: {width:.1f} x {height:.1f} pt")
+    print(f"  Font size: {fontsize}pt")
+    print(f"{'='*80}\n")
+
+    # 构建完整的HTML文档，包含CSS样式
+    # 使用table-layout: auto让浏览器自动计算列宽
+    full_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {{
+                size: {width}pt {height * 3}pt;  /* 给足够高度，稍后裁剪 */
+                margin: 0;
+            }}
+            body {{
+                margin: 0;
+                padding: 0;
+                font-family: "Microsoft YaHei", "SimHei", Arial, sans-serif;
+            }}
+            table {{
+                width: {width}pt;
+                border-collapse: collapse;
+                font-size: {fontsize}pt;
+                table-layout: auto;  /* 关键：自动计算列宽 */
+            }}
+            th, td {{
+                border: 0.5pt solid black;
+                padding: 4pt 6pt;
+                text-align: left;
+                vertical-align: middle;
+                word-wrap: break-word;
+            }}
+            th {{
+                font-weight: bold;
+                background-color: #f5f5f5;
+            }}
+            /* 数字右对齐 */
+            td:nth-child(n+3) {{
+                text-align: right;
+            }}
+            strong {{
+                font-weight: bold;
+                color: #000;
+            }}
+        </style>
+    </head>
+    <body>{table_html}</body>
+    </html>
+    """
+
+    # 使用WeasyPrint渲染为PDF字节流
+    print("  Rendering HTML with WeasyPrint...")
+    pdf_bytes = BytesIO()
+    HTML(string=full_html).write_pdf(pdf_bytes)
+    pdf_bytes.seek(0)
+
+    # 用PyMuPDF打开渲染后的PDF
+    temp_doc = fitz.open(stream=pdf_bytes.read(), filetype="pdf")
+    temp_page = temp_doc[0]
+
+    # 获取实际渲染内容的边界（去除空白）
+    # 使用get_text("dict")获取文本块来确定实际内容区域
+    src_rect = temp_page.rect
+
+    # 计算缩放比例，使表格适配目标bbox
+    # 优先保证宽度适配，高度按比例缩放
+    scale_x = width / src_rect.width if src_rect.width > 0 else 1
+    scale_y = height / src_rect.height if src_rect.height > 0 else 1
+
+    # 使用较小的缩放比例，保证表格完全在bbox内
+    scale = min(scale_x, scale_y, 1.0)  # 不放大，只缩小
+
+    # 计算实际渲染尺寸
+    actual_width = src_rect.width * scale
+    actual_height = src_rect.height * scale
+
+    # 计算目标矩形（居中或左上对齐）
+    # 这里使用左上对齐
+    target_rect = fitz.Rect(
+        x0,
+        y0,
+        x0 + actual_width,
+        y0 + actual_height
+    )
+
+    print(f"  Source size: {src_rect.width:.1f} x {src_rect.height:.1f} pt")
+    print(f"  Scale factor: {scale:.3f}")
+    print(f"  Actual rendered size: {actual_width:.1f} x {actual_height:.1f} pt")
+
+    # 将渲染结果嵌入到目标页面
+    page.show_pdf_page(target_rect, temp_doc, 0)
+
+    temp_doc.close()
+    print("[OK] WeasyPrint table rendering complete\n")
+
+
 def main():
     """Main function to demonstrate table rendering"""
     print("\n" + "="*80)
@@ -290,6 +409,15 @@ def main():
     # Create PDF document
     doc = fitz.open()
     page = doc.new_page(width=595, height=842)  # A4 size
+
+    # Add title to page 1 (before rendering tables)
+    page.insert_text(
+        point=(50, 30),
+        text="WeasyPrint Adaptive Table Rendering Demo",
+        fontsize=16,
+        fontname="helv",
+        color=(0, 0, 0)
+    )
 
     # Example 1: Simple table from your data
     print("\nExample 1: VAR Model Comparison Table")
@@ -351,52 +479,80 @@ def main():
 </tbody>
 </table>"""
 
-    # Render at original position (scaled from your bbox)
-    bbox_1 = (50, 50, 545, 250)  # Adjusted for A4 page
-    render_table(page, bbox_1, table_html_1, fontsize=9)
+    # 使用WeasyPrint渲染 - 自动计算列宽
+    bbox_1 = (50, 50, 245, 250)  # Adjusted for A4 page
+    render_table_with_weasyprint(page, bbox_1, table_html_1, fontsize=9)
 
-    # Example 2: Another table on the same page
-    print("\nExample 2: Simple Performance Table")
+    # Example 2: 内容不均匀的表格（测试自适应列宽）
+    print("\nExample 2: Uneven Content Table (Testing Adaptive Column Width)")
     print("-" * 80)
 
     table_html_2 = """<table>
 <thead>
 <tr>
-<th>Method</th>
-<th>Accuracy</th>
-<th>Speed</th>
+<th>ID</th>
+<th>Description</th>
+<th>Value</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Method A</td>
-<td>95.2</td>
-<td>Fast</td>
+<td>1</td>
+<td>This is a very long description that demonstrates how the column width adapts to content automatically</td>
+<td>42.5</td>
 </tr>
 <tr>
-<td>Method B</td>
-<td><strong>98.7</strong></td>
-<td>Slow</td>
+<td>2</td>
+<td>Short text</td>
+<td><strong>99.9</strong></td>
 </tr>
 <tr>
-<td>Method C</td>
-<td>96.1</td>
-<td>Medium</td>
+<td>3</td>
+<td>Medium length description here</td>
+<td>73.2</td>
 </tr>
 </tbody>
 </table>"""
 
-    bbox_2 = (50, 280, 350, 400)
-    render_table(page, bbox_2, table_html_2, fontsize=10)
+    bbox_2 = (50, 280, 245, 450)
+    render_table_with_weasyprint(page, bbox_2, table_html_2, fontsize=10)
 
-    # Add title
-    page.insert_text(
+    # Example 3: 对比 - 使用原始平均分配方法
+    print("\nExample 3: Original Method (Equal Column Width) for Comparison")
+    print("-" * 80)
+
+    page2 = doc.new_page(width=595, height=842)  # 新页面
+
+    # 先添加所有标题文字（在渲染表格之前）
+    page2.insert_text(
         point=(50, 30),
-        text="HTML Table Rendering Demo - PyMuPDF",
-        fontsize=16,
+        text="WeasyPrint (Adaptive Width):",
+        fontsize=12,
         fontname="helv",
         color=(0, 0, 0)
     )
+    page2.insert_text(
+        point=(315, 30),
+        text="Original (Equal Width):",
+        fontsize=12,
+        fontname="helv",
+        color=(0, 0, 0)
+    )
+    page2.insert_text(
+        point=(150, 230),
+        text="Comparison: Adaptive vs Equal Width",
+        fontsize=14,
+        fontname="helv",
+        color=(0, 0, 0)
+    )
+
+    # 左边：WeasyPrint自适应
+    bbox_3a = (50, 50, 280, 200)
+    render_table_with_weasyprint(page2, bbox_3a, table_html_2, fontsize=8)
+
+    # 右边：原始平均分配
+    bbox_3b = (315, 50, 545, 200)
+    render_table(page2, bbox_3b, table_html_2, fontsize=8)
 
     # Save PDF
     output_path = output_dir / "demo_table_render.pdf"

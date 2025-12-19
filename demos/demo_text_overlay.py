@@ -904,6 +904,64 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
                     print(f"    [错误] 表格渲染失败: {e}")
                     page.insert_textbox(rect, "错误: 表格渲染失败",
                                        fontsize=10, color=(1, 0, 0))
+            elif category == 'formula':
+                # Formula rendering path (display formula)
+                try:
+                    print(f"    [公式] 元素 {elem_idx + 1}")
+
+                    # Extract formula content (remove $$ delimiters)
+                    formula_text = text.strip()
+                    if formula_text.startswith('$$') and formula_text.endswith('$$'):
+                        formula_content = formula_text[2:-2].strip()
+                    elif formula_text.startswith('$') and formula_text.endswith('$'):
+                        formula_content = formula_text[1:-1].strip()
+                    else:
+                        formula_content = formula_text
+
+                    # Calculate appropriate font size based on bbox height
+                    bbox_height = rect.height
+                    # Use larger font size for display formulas
+                    formula_fontsize = min(bbox_height * 0.6, 24)  # Max 24pt
+                    formula_fontsize = max(formula_fontsize, 14)   # Min 14pt
+
+                    # Render formula to image
+                    formula_bytes, img_width_px, img_height_px = render_latex_to_bytes_with_size(
+                        formula_content, fontsize=formula_fontsize, dpi=300
+                    )
+
+                    # Convert pixels to points
+                    px_to_pt = 72.0 / 300.0
+                    img_width_pt = img_width_px * px_to_pt
+                    img_height_pt = img_height_px * px_to_pt
+
+                    # Calculate scaling to fit in bbox while maintaining aspect ratio
+                    scale_x = rect.width / img_width_pt if img_width_pt > 0 else 1
+                    scale_y = rect.height / img_height_pt if img_height_pt > 0 else 1
+                    scale = min(scale_x, scale_y, 1.0)  # Don't upscale
+
+                    final_width = img_width_pt * scale
+                    final_height = img_height_pt * scale
+
+                    # Center the formula in the bbox
+                    center_x = rect.x0 + (rect.width - final_width) / 2
+                    center_y = rect.y0 + (rect.height - final_height) / 2
+
+                    # Create image rectangle
+                    img_rect = fitz.Rect(
+                        center_x,
+                        center_y,
+                        center_x + final_width,
+                        center_y + final_height
+                    )
+
+                    # Insert formula image
+                    page.insert_image(img_rect, stream=formula_bytes)
+                    print(f"    [OK] 公式渲染完成 (尺寸: {final_width:.1f}x{final_height:.1f}pt)")
+
+                except Exception as e:
+                    print(f"    [错误] 公式渲染失败: {e}")
+                    page.insert_textbox(rect, f"错误: 公式渲染失败\n{text[:50]}",
+                                       fontsize=8, color=(1, 0, 0))
             else:
                 # Text/Title/Caption rendering path (existing logic)
                 # Replace letters with 'c'
