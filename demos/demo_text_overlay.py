@@ -396,21 +396,24 @@ def calculate_text_dimensions(text: str, fontname: str, fontsize: float, max_wid
     has_cjk = any(is_cjk_char(ch) for ch in text)
 
     # Character width function matching render_mixed_content logic
+    # Use conservative estimates to prevent right overflow
     def get_char_width(ch):
         if is_cjk_char(ch):
             # Full-width characters (CJK ideographs, punctuation, etc.)
             return fontsize * 1.0
         elif has_cjk:
             # When using CJK font for mixed text:
-            # Latin letters and numbers are rendered at ~0.5 fontsize width
+            # Use more conservative (larger) estimates to prevent overflow
             if ch == ' ':
-                return fontsize * 0.35  # Space is narrower
-            elif ch in 'mwMW':
-                return fontsize * 0.7  # Wide letters
-            elif ch in 'il1!|':
-                return fontsize * 0.3  # Narrow characters
+                return fontsize * 0.4  # Space
+            elif ch in 'mwMW@':
+                return fontsize * 0.8  # Wide letters
+            elif ch in 'il1!|.,;:\'"':
+                return fontsize * 0.35  # Narrow characters
+            elif ch in 'fjrt':
+                return fontsize * 0.45  # Slightly narrow
             else:
-                return fontsize * 0.5  # Average half-width
+                return fontsize * 0.6  # Average - be conservative
         else:
             # Pure Latin text using helv font
             return fitz.get_text_length(ch, fontname=fontname, fontsize=fontsize)
@@ -456,20 +459,20 @@ def calculate_text_dimensions(text: str, fontname: str, fontsize: float, max_wid
 
 
 def calculate_adaptive_font_size(text: str, bbox: fitz.Rect,
-                                   default_size: int = 12, min_size: int = 4,
+                                   default_size: int = 10, min_size: int = 4,
                                    fontname: str = "helv") -> tuple:
     """
     Calculate adaptive font size and line spacing.
 
-    Strategy:
-    1. First try reducing line height (from 1.2 down to 0.9) to fit more lines
-    2. If still doesn't fit, then reduce font size
-    3. Goal: Ensure all text is displayed, never truncated
+    Strategy (user preference: don't enlarge font, keep readable line spacing):
+    1. Start with default font size and normal line spacing (1.2)
+    2. If doesn't fit, SHRINK font size first (keep line spacing)
+    3. Only reduce line spacing as last resort if min font still doesn't fit
 
     Args:
         text: Text to fit in bbox
         bbox: Bounding rectangle
-        default_size: Default starting size (will not grow beyond this)
+        default_size: Default/maximum font size (default: 10pt)
         min_size: Minimum size threshold (default: 4pt)
 
     Returns:
@@ -479,33 +482,28 @@ def calculate_adaptive_font_size(text: str, bbox: fitz.Rect,
     bbox_height = bbox.y1 - bbox.y0
 
     # Match the margin values in render_mixed_content
-    margin_x = 1
+    margin_x = 2  # Must match render_mixed_content
     margin_y = 1
 
-    # Calculate actual usable space (matching render_mixed_content)
-    # Add extra safety margin (2pt) to ensure text definitely fits
+    # Calculate actual usable space
     usable_width = bbox_width - margin_x * 2
-    usable_height = bbox_height - margin_y * 2 - 2  # 2pt safety margin
+    usable_height = bbox_height - margin_y * 2 - 2  # 2pt safety margin for height
 
-    # Line spacing values to try (from loose to tight)
-    line_spacings = [1.2, 1.1, 1.0, 0.95, 0.9]
+    # Default line spacing - keep it readable
+    default_line_spacing = 1.2
 
-    # Step 1: Try reducing line spacing first with default font size
-    for line_spacing in line_spacings:
-        _, height, _ = calculate_text_dimensions(text, fontname, default_size, usable_width, line_spacing)
-        if height <= usable_height:
-            return default_size, line_spacing
+    # Step 1: Try default size with normal line spacing
+    _, height, _ = calculate_text_dimensions(text, fontname, default_size, usable_width, default_line_spacing)
+    if height <= usable_height:
+        return default_size, default_line_spacing
 
-    # Step 2: Line spacing reduction wasn't enough, now reduce font size
-    # Use the tightest line spacing (0.9) and binary search for font size
-    min_line_spacing = 0.9
-
+    # Step 2: Shrink font size (keep normal line spacing)
     low, high = min_size, default_size
     best_size = min_size
 
     while low <= high:
         mid = (low + high) // 2
-        _, height, _ = calculate_text_dimensions(text, fontname, mid, usable_width, min_line_spacing)
+        _, height, _ = calculate_text_dimensions(text, fontname, mid, usable_width, default_line_spacing)
 
         if height <= usable_height:
             best_size = mid
@@ -513,13 +511,20 @@ def calculate_adaptive_font_size(text: str, bbox: fitz.Rect,
         else:
             high = mid - 1
 
-    # Step 3: With the found font size, try to use a looser line spacing if possible
-    for line_spacing in line_spacings:
-        _, height, _ = calculate_text_dimensions(text, fontname, best_size, usable_width, line_spacing)
-        if height <= usable_height:
-            return best_size, line_spacing
+    # Check if we found a working size with normal line spacing
+    _, height, _ = calculate_text_dimensions(text, fontname, best_size, usable_width, default_line_spacing)
+    if height <= usable_height:
+        return best_size, default_line_spacing
 
-    return best_size, min_line_spacing
+    # Step 3: Last resort - use minimum font and reduce line spacing
+    line_spacings = [1.1, 1.0, 0.95, 0.9]
+    for line_spacing in line_spacings:
+        _, height, _ = calculate_text_dimensions(text, fontname, min_size, usable_width, line_spacing)
+        if height <= usable_height:
+            return min_size, line_spacing
+
+    # Absolute fallback
+    return min_size, 0.9
 
 
 def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
@@ -570,14 +575,14 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                 cjk_fontname = "cjk-font"
                 break
 
-    # Minimal margins
-    margin_x = 1  # Horizontal margin
+    # Margins - be conservative to prevent overflow
+    margin_x = 2  # Horizontal margin (increased for safety)
     margin_y = 1  # Vertical margin
 
     cursor_x = bbox.x0 + margin_x
     cursor_y = bbox.y0 + margin_y + fontsize * 0.85  # Adjust baseline position
     line_height = fontsize * line_spacing
-    max_x = bbox.x1 - margin_x
+    max_x = bbox.x1 - margin_x  # Right boundary
 
     # Character buffer for batch insertion
     cstk = ""  # Character stack
@@ -613,22 +618,24 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
 
     # Character width calculation function
     # When using CJK font, all characters are rendered with that font
-    # CJK chars = full-width, Latin/numbers = half-width (approximately)
+    # Use conservative estimates to prevent right overflow
     def get_char_width(ch):
         if is_cjk_char(ch):
             # Full-width characters (CJK ideographs, punctuation, etc.)
             return fontsize * 1.0
         elif has_cjk and cjk_fontfile:
             # When using CJK font for mixed text:
-            # Latin letters and numbers are rendered at ~0.5 fontsize width
+            # Use more conservative (larger) estimates to prevent overflow
             if ch == ' ':
-                return fontsize * 0.35  # Space is narrower
-            elif ch in 'mwMW':
-                return fontsize * 0.7  # Wide letters
-            elif ch in 'il1!|':
-                return fontsize * 0.3  # Narrow characters
+                return fontsize * 0.4  # Space
+            elif ch in 'mwMW@':
+                return fontsize * 0.8  # Wide letters
+            elif ch in 'il1!|.,;:\'"':
+                return fontsize * 0.35  # Narrow characters
+            elif ch in 'fjrt':
+                return fontsize * 0.45  # Slightly narrow
             else:
-                return fontsize * 0.5  # Average half-width
+                return fontsize * 0.6  # Average - be conservative
         else:
             # Pure Latin text using helv font
             return fitz.get_text_length(ch, fontname=fontname, fontsize=fontsize)
