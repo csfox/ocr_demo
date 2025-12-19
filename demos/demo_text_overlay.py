@@ -368,16 +368,22 @@ def render_latex_to_bytes_with_size(latex_formula: str, fontsize: int = 20, dpi:
     return img_bytes, width, height
 
 
-def calculate_text_dimensions(text: str, fontname: str, fontsize: float, max_width: float) -> tuple:
+def calculate_text_dimensions(text: str, fontname: str, fontsize: float, max_width: float, line_spacing: float = 1.2) -> tuple:
     """
     Calculate dimensions of text when rendered with wrapping.
     Simulates the actual line-breaking logic used in render_mixed_content.
+
+    Height calculation matches render_mixed_content:
+    - First line: fontsize (baseline at 0.85, descender at 0.15)
+    - Subsequent lines: (n-1) * fontsize * line_spacing
+    - Total: fontsize + (n-1) * fontsize * line_spacing
 
     Args:
         text: Text to measure
         fontname: Font name
         fontsize: Font size
         max_width: Maximum width before wrapping
+        line_spacing: Line spacing multiplier (default 1.2)
 
     Returns:
         Tuple of (total_width, total_height, num_lines)
@@ -438,17 +444,27 @@ def calculate_text_dimensions(text: str, fontname: str, fontsize: float, max_wid
 
     max_line_width = max(max_line_width, cursor_x)
 
-    line_spacing = 1.2
-    total_height = num_lines * fontsize * line_spacing
+    # Height calculation matching render_mixed_content:
+    # First line takes fontsize, subsequent lines add fontsize * line_spacing each
+    # total = fontsize + (num_lines - 1) * fontsize * line_spacing
+    if num_lines == 1:
+        total_height = fontsize
+    else:
+        total_height = fontsize + (num_lines - 1) * fontsize * line_spacing
 
     return max_line_width, total_height, num_lines
 
 
 def calculate_adaptive_font_size(text: str, bbox: fitz.Rect,
                                    default_size: int = 12, min_size: int = 4,
-                                   fontname: str = "helv") -> int:
+                                   fontname: str = "helv") -> tuple:
     """
-    Calculate adaptive font size (shrink-only).
+    Calculate adaptive font size and line spacing.
+
+    Strategy:
+    1. First try reducing line height (from 1.2 down to 0.9) to fit more lines
+    2. If still doesn't fit, then reduce font size
+    3. Goal: Ensure all text is displayed, never truncated
 
     Args:
         text: Text to fit in bbox
@@ -457,25 +473,39 @@ def calculate_adaptive_font_size(text: str, bbox: fitz.Rect,
         min_size: Minimum size threshold (default: 4pt)
 
     Returns:
-        Font size that fits the bbox
+        Tuple of (font_size, line_spacing) that fits the bbox
     """
     bbox_width = bbox.x1 - bbox.x0
     bbox_height = bbox.y1 - bbox.y0
 
-    usable_width = bbox_width * 0.95
-    usable_height = bbox_height * 0.95
+    # Match the margin values in render_mixed_content
+    margin_x = 1
+    margin_y = 1
 
-    _, height, _ = calculate_text_dimensions(text, fontname, default_size, usable_width)
+    # Calculate actual usable space (matching render_mixed_content)
+    # Add extra safety margin (2pt) to ensure text definitely fits
+    usable_width = bbox_width - margin_x * 2
+    usable_height = bbox_height - margin_y * 2 - 2  # 2pt safety margin
 
-    if height <= usable_height:
-        return default_size
+    # Line spacing values to try (from loose to tight)
+    line_spacings = [1.2, 1.1, 1.0, 0.95, 0.9]
+
+    # Step 1: Try reducing line spacing first with default font size
+    for line_spacing in line_spacings:
+        _, height, _ = calculate_text_dimensions(text, fontname, default_size, usable_width, line_spacing)
+        if height <= usable_height:
+            return default_size, line_spacing
+
+    # Step 2: Line spacing reduction wasn't enough, now reduce font size
+    # Use the tightest line spacing (0.9) and binary search for font size
+    min_line_spacing = 0.9
 
     low, high = min_size, default_size
     best_size = min_size
 
     while low <= high:
         mid = (low + high) // 2
-        _, height, _ = calculate_text_dimensions(text, fontname, mid, usable_width)
+        _, height, _ = calculate_text_dimensions(text, fontname, mid, usable_width, min_line_spacing)
 
         if height <= usable_height:
             best_size = mid
@@ -483,11 +513,18 @@ def calculate_adaptive_font_size(text: str, bbox: fitz.Rect,
         else:
             high = mid - 1
 
-    return best_size
+    # Step 3: With the found font size, try to use a looser line spacing if possible
+    for line_spacing in line_spacings:
+        _, height, _ = calculate_text_dimensions(text, fontname, best_size, usable_width, line_spacing)
+        if height <= usable_height:
+            return best_size, line_spacing
+
+    return best_size, min_line_spacing
 
 
 def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
-                          fontsize: int, fontname: str = "helv", bg_color_rgb: tuple = (255, 255, 255)):
+                          fontsize: int, fontname: str = "helv", bg_color_rgb: tuple = (255, 255, 255),
+                          line_spacing: float = None):
     """
     Render text with inline LaTeX formulas using character-by-character processing.
 
@@ -498,12 +535,14 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
         fontsize: Font size to use
         fontname: Font name
         bg_color_rgb: Background color RGB tuple (r, g, b), range 0-255
+        line_spacing: Line spacing multiplier (if None, auto-detect from language)
     """
     segments = parse_mixed_content(text)
 
-    # Detect language and get appropriate line spacing
-    lang = detect_language(text)
-    line_spacing = LANG_LINEHEIGHT_MAP.get(lang, 1.2)
+    # Use provided line_spacing or auto-detect from language
+    if line_spacing is None:
+        lang = detect_language(text)
+        line_spacing = LANG_LINEHEIGHT_MAP.get(lang, 1.2)
 
     # Auto-detect text color based on background brightness
     brightness = (bg_color_rgb[0] * 299 + bg_color_rgb[1] * 587 + bg_color_rgb[2] * 114) / 1000
@@ -617,11 +656,6 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                     cursor_x = bbox.x0 + margin_x
                     cursor_y += line_height
 
-                    # Check for overflow
-                    if cursor_y > bbox.y1 - margin_y - fontsize * 0.3:
-                        print(f"Warning: Content overflow at y={cursor_y}")
-                        return
-
                     # Skip leading space on new line
                     if ch == ' ':
                         continue
@@ -656,10 +690,6 @@ def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                     cursor_x = bbox.x0 + margin_x
                     cursor_y += line_height
                     cstk_x = cursor_x
-
-                    if cursor_y > bbox.y1 - margin_y - fontsize * 0.3:
-                        print(f"Warning: Content overflow at y={cursor_y}")
-                        return
 
                 img_rect = fitz.Rect(
                     cursor_x,
@@ -1075,12 +1105,13 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
                         print(f"      原文: {text[:80]}{'...' if len(text) > 80 else ''}")
                         print(f"      译文: {translated_text[:80]}{'...' if len(translated_text) > 80 else ''}")
 
-                # Calculate adaptive font size based on the FINAL text (after translation)
+                # Calculate adaptive font size and line spacing based on the FINAL text (after translation)
+                # Strategy: First reduce line spacing, then font size if needed
                 text_only = re.sub(r'\$.*?\$', 'FORMULA', modified_text)
-                fontsize = calculate_adaptive_font_size(text_only, rect, default_size=12, min_size=3)
+                fontsize, line_spacing = calculate_adaptive_font_size(text_only, rect, default_size=12, min_size=3)
 
-                # Render mixed content with auto color adaptation
-                render_mixed_content(page, modified_text, rect, fontsize, bg_color_rgb=bg_color)
+                # Render mixed content with auto color adaptation and calculated line spacing
+                render_mixed_content(page, modified_text, rect, fontsize, bg_color_rgb=bg_color, line_spacing=line_spacing)
 
             # Draw bbox border if requested
             if draw_bbox:
