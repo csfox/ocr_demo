@@ -1117,6 +1117,12 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
                 text_only = re.sub(r'\$.*?\$', 'FORMULA', modified_text)
                 fontsize, line_spacing = calculate_adaptive_font_size(text_only, rect, default_size=12, min_size=3)
 
+                # Print font size for each text element
+                display_text = text[:40].replace('\n', ' ')
+                if len(text) > 40:
+                    display_text += "..."
+                print(f"    [{category}] 元素 {elem_idx + 1}: {fontsize}pt | {display_text}")
+
                 # Render mixed content with auto color adaptation and calculated line spacing
                 render_mixed_content(page, modified_text, rect, fontsize, bg_color_rgb=bg_color, line_spacing=line_spacing)
 
@@ -1187,9 +1193,9 @@ JSON格式:
     # Translation options
     parser.add_argument('--translate', action='store_true',
                        help='启用翻译功能')
-    parser.add_argument('--src-lang', type=str, default='en',
+    parser.add_argument('--src-lang', type=str, default='zh',
                        help='源语言 (默认: en)')
-    parser.add_argument('--tgt-lang', type=str, default='zh',
+    parser.add_argument('--tgt-lang', type=str, default='en',
                        help='目标语言 (默认: zh)')
     parser.add_argument('--model', type=str, default=None,
                        help='翻译模型 (deepseek_v3, volcengine)')

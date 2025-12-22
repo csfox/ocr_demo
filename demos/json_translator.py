@@ -21,7 +21,7 @@ from typing import List, Tuple, Dict, Optional
 TRANSLATION_API_CONFIG = {
     "base_url": "http://172.16.199.171:24861",
     "endpoint": "/api/v1/text/translate",
-    "timeout": 30,
+    "timeout": 120,  # 2 minutes timeout
     "default_model": "deepseek_v3",
     "default_app_id": "ocr_demo",
 }
