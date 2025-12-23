@@ -15,6 +15,7 @@ import numpy as np
 import re
 import math
 import time
+import base64
 from pathlib import Path
 from io import BytesIO
 import matplotlib.pyplot as plt
@@ -22,6 +23,46 @@ import io
 from PIL import Image
 from weasyprint import HTML
 from json_translator import translate_element_text, should_skip_translation as should_skip_translation_check
+import httpx
+from openai import OpenAI
+
+
+# ==================== OCR 服务配置（对齐 local/conf/service.yaml） ====================
+OCR_API_BASE_URL = "http://127.0.0.1:9000/v1"  # 本地 OCR 服务地址
+OCR_API_KEY = "sk-xxxxxxxxxxxx"                 # API Key
+OCR_MODEL = "model"                             # 模型名称
+
+# 超时配置（单位：秒）
+OCR_TIMEOUT = 180
+
+# 推理参数
+OCR_TEMPERATURE = 0.1
+OCR_TOP_P = 1.0
+OCR_MAX_COMPLETION_TOKENS = 16384
+
+# 图片尺寸常量（对齐 Dots OCR）
+IMAGE_FACTOR = 28
+MIN_PIXELS = 3136           # 56x56
+MAX_PIXELS = 11289600       # 3360x3360
+
+# Prompt 定义（完整版，一行都不少）
+OCR_PROMPT_LAYOUT_ALL = """Please output the layout information from the PDF image, including each layout element's bbox, its category, and the corresponding text content within the bbox.
+
+1. Bbox format: [x1, y1, x2, y2]
+
+2. Layout Categories: The possible categories are ['Caption', 'Footnote', 'Formula', 'List-item', 'Page-footer', 'Page-header', 'Picture', 'Section-header', 'Table', 'Text', 'Title'].
+
+3. Text Extraction & Formatting Rules:
+    - Picture: For the 'Picture' category, the text field should be omitted.
+    - Formula: Format its text as LaTeX.
+    - Table: Format its text as HTML.
+    - All Others (Text, Title, etc.): Format their text as Markdown.
+
+4. Constraints:
+    - The output text must be the original text from the image, with no translation.
+    - All layout elements must be sorted according to human reading order.
+
+5. Final Output: The entire output must be a single JSON object."""
 
 
 # Language-specific line height map (from restorer.py)
@@ -33,6 +74,309 @@ LANG_LINEHEIGHT_MAP = {
     "ar": 1.0,     # Arabic
     "ru": 0.8,     # Russian
 }
+
+
+# ==================== 图片尺寸计算（对齐 Dots OCR） ====================
+
+def round_by_factor(value: int, factor: int) -> int:
+    """四舍五入到最近的 factor 倍数"""
+    return ((value + factor // 2) // factor) * factor
+
+
+def floor_by_factor(value: int, factor: int) -> int:
+    """向下取整到 factor 倍数"""
+    return (value // factor) * factor
+
+
+def ceil_by_factor(value: int, factor: int) -> int:
+    """向上取整到 factor 倍数"""
+    return ((value + factor - 1) // factor) * factor
+
+
+def calculate_target_size(height: int, width: int) -> tuple:
+    """
+    计算目标尺寸（对齐 Dots OCR 的 Python 版本逻辑）
+
+    Args:
+        height: 原始高度
+        width: 原始宽度
+
+    Returns:
+        (target_height, target_width)
+    """
+    # 1. 验证长宽比
+    max_dim = max(height, width)
+    min_dim = min(height, width)
+    if min_dim == 0:
+        raise ValueError(f"Invalid dimensions: height={height}, width={width}")
+    if max_dim / min_dim > 200:
+        raise ValueError(f"Aspect ratio {max_dim / min_dim:.2f} exceeds maximum 200")
+
+    # 2. 先对原始尺寸进行 round 对齐，并确保至少为 IMAGE_FACTOR
+    h_bar = max(IMAGE_FACTOR, round_by_factor(height, IMAGE_FACTOR))
+    w_bar = max(IMAGE_FACTOR, round_by_factor(width, IMAGE_FACTOR))
+
+    # 3. 如果对齐后超出 MAX_PIXELS：使用原始尺寸重新计算（floor）
+    if h_bar * w_bar > MAX_PIXELS:
+        beta = math.sqrt(height * width / MAX_PIXELS)
+        h_bar = max(IMAGE_FACTOR, floor_by_factor(int(height / beta), IMAGE_FACTOR))
+        w_bar = max(IMAGE_FACTOR, floor_by_factor(int(width / beta), IMAGE_FACTOR))
+    elif h_bar * w_bar < MIN_PIXELS:
+        # 4. 如果对齐后低于 MIN_PIXELS：使用原始尺寸重新计算（ceil）
+        beta = math.sqrt(MIN_PIXELS / (height * width))
+        h_bar = ceil_by_factor(int(height * beta), IMAGE_FACTOR)
+        w_bar = ceil_by_factor(int(width * beta), IMAGE_FACTOR)
+
+        # 5. 二次检查是否超出 MAX_PIXELS
+        if h_bar * w_bar > MAX_PIXELS:
+            beta = math.sqrt(h_bar * w_bar / MAX_PIXELS)
+            h_bar = max(IMAGE_FACTOR, floor_by_factor(int(h_bar / beta), IMAGE_FACTOR))
+            w_bar = max(IMAGE_FACTOR, floor_by_factor(int(w_bar / beta), IMAGE_FACTOR))
+
+    return h_bar, w_bar
+
+
+def resize_image_for_ocr(img: Image.Image) -> Image.Image:
+    """
+    调整图片尺寸以符合 Dots OCR 要求
+
+    Args:
+        img: PIL Image 对象
+
+    Returns:
+        调整后的 PIL Image 对象
+    """
+    width, height = img.size
+    target_h, target_w = calculate_target_size(height, width)
+
+    if target_h != height or target_w != width:
+        img = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+
+    return img
+
+
+def image_to_base64(img: Image.Image) -> str:
+    """
+    将 PIL Image 转换为 base64 字符串
+
+    Args:
+        img: PIL Image 对象
+
+    Returns:
+        base64 编码的字符串
+    """
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return base64.b64encode(buffer.read()).decode("utf-8")
+
+
+# ==================== PDF 转图片 ====================
+
+def pdf_page_to_image(page: fitz.Page, dpi: int = 200) -> Image.Image:
+    """
+    将 PDF 页面转换为 PIL Image。
+
+    Args:
+        page: PyMuPDF 页面对象
+        dpi: 图片 DPI（默认 200）
+
+    Returns:
+        PIL Image 对象
+    """
+    # 计算缩放因子（PDF 默认 72 DPI）
+    zoom = dpi / 72.0
+    mat = fitz.Matrix(zoom, zoom)
+
+    # 渲染页面为 pixmap
+    pix = page.get_pixmap(matrix=mat)
+
+    # 转换为 PIL Image
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+    return img
+
+
+# ==================== OCR API 调用 ====================
+
+def call_ocr_api(img: Image.Image, page_index: int,
+                 retry_count: int = 3, retry_delay_ms: int = 1000) -> dict:
+    """
+    调用 OCR API 提取图片内容结构（使用 OpenAI 兼容格式）。
+
+    Args:
+        img: PIL Image 对象
+        page_index: 页面索引（用于日志）
+        retry_count: 重试次数（默认 3）
+        retry_delay_ms: 重试延迟毫秒（默认 1000）
+
+    Returns:
+        OCR 结果字典，包含 elements 列表
+
+    Raises:
+        Exception: OCR 请求失败
+    """
+    # 获取原始图片尺寸
+    orig_width, orig_height = img.size
+
+    # 调整图片尺寸
+    resized_img = resize_image_for_ocr(img)
+    new_width, new_height = resized_img.size
+
+    # 转换为 base64
+    base64_img = image_to_base64(resized_img)
+
+    # 构建完整 prompt（加上 Dots OCR 特殊前缀）
+    full_prompt = "<|img|><|imgpad|><|endofimg|>" + OCR_PROMPT_LAYOUT_ALL
+
+    # 创建 OpenAI 客户端（禁用代理，设置超时）
+    # trust_env=False 完全忽略环境变量中的代理设置
+    http_client = httpx.Client(
+        trust_env=False,
+        timeout=httpx.Timeout(float(OCR_TIMEOUT), connect=30.0),
+    )
+    client = OpenAI(
+        api_key=OCR_API_KEY,
+        base_url=OCR_API_BASE_URL,
+        http_client=http_client,
+    )
+
+    for attempt in range(1, retry_count + 1):
+        try:
+            print(f"    [OCR] 页面 {page_index + 1}: 第 {attempt}/{retry_count} 次请求...")
+            print(f"    [OCR] 图片尺寸: {orig_width}x{orig_height} -> {new_width}x{new_height}")
+
+            # 调用 OpenAI 兼容 API（参数对齐 local/conf/service.yaml）
+            response = client.chat.completions.create(
+                model=OCR_MODEL,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_img}"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": full_prompt
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=OCR_MAX_COMPLETION_TOKENS,
+                temperature=OCR_TEMPERATURE,
+                top_p=OCR_TOP_P,
+            )
+
+            # 解析响应
+            content = response.choices[0].message.content
+            if not content:
+                raise Exception("OCR 响应内容为空")
+
+            # 解析 JSON
+            try:
+                elements = json.loads(content)
+            except json.JSONDecodeError:
+                # 尝试清理响应（移除可能的 markdown 代码块标记）
+                cleaned = content.strip()
+                if cleaned.startswith("```json"):
+                    cleaned = cleaned[7:]
+                if cleaned.startswith("```"):
+                    cleaned = cleaned[3:]
+                if cleaned.endswith("```"):
+                    cleaned = cleaned[:-3]
+                elements = json.loads(cleaned.strip())
+
+            print(f"    [OCR] 页面 {page_index + 1}: 成功，识别 {len(elements)} 个元素")
+
+            # 检查第一个元素的 bbox 格式
+            if elements:
+                sample_bbox = elements[0].get("bbox", [])
+                print(f"    [OCR] 样本 bbox: {sample_bbox} (基于 {new_width}x{new_height})")
+
+            # OCR 返回的 bbox 是像素坐标，基于 resize 后的图片尺寸
+            # 需要转换回原始图片尺寸
+            scale_x = orig_width / new_width
+            scale_y = orig_height / new_height
+
+            converted_elements = []
+            for elem in elements:
+                bbox = elem.get("bbox", [0, 0, 0, 0])
+
+                # 将 bbox 从 resize 后尺寸转换为原始尺寸
+                pixel_bbox = [
+                    bbox[0] * scale_x,
+                    bbox[1] * scale_y,
+                    bbox[2] * scale_x,
+                    bbox[3] * scale_y,
+                ]
+
+                converted_elements.append({
+                    "bbox": pixel_bbox,
+                    "category": elem.get("category", "Text"),
+                    "text": elem.get("text", ""),
+                })
+
+            return {
+                "page_index": page_index,
+                "elements": converted_elements,
+                "image_info": {
+                    "width": orig_width,
+                    "height": orig_height,
+                },
+            }
+
+        except Exception as e:
+            print(f"    [OCR] 页面 {page_index + 1}: 第 {attempt} 次请求失败 - {e}")
+
+            if attempt < retry_count:
+                # 等待后重试（递增延迟）
+                delay = retry_delay_ms * attempt / 1000.0
+                time.sleep(delay)
+            else:
+                raise Exception(f"OCR 请求失败，已重试 {retry_count} 次: {e}")
+
+
+def extract_pdf_with_ocr(pdf_path: str, image_dpi: int = 200) -> dict:
+    """
+    使用 OCR API 提取 PDF 所有页面的内容。
+
+    Args:
+        pdf_path: PDF 文件路径
+        image_dpi: 图片 DPI（默认 200）
+
+    Returns:
+        包含所有页面元素的字典 {"pages": [...]}
+    """
+    print(f"\n[OCR] 开始提取 PDF: {pdf_path}")
+    print(f"[OCR] 图片 DPI: {image_dpi}")
+
+    doc = fitz.open(pdf_path)
+    total_pages = len(doc)
+    print(f"[OCR] 共 {total_pages} 页")
+
+    pages_data = []
+
+    for page_index in range(total_pages):
+        page = doc[page_index]
+        print(f"\n[OCR] 处理页面 {page_index + 1}/{total_pages}...")
+
+        # 转换页面为图片
+        img = pdf_page_to_image(page, dpi=image_dpi)
+        print(f"    [OCR] 原始图片尺寸: {img.size[0]}x{img.size[1]}")
+
+        # 调用 OCR API
+        page_result = call_ocr_api(img, page_index)
+        pages_data.append(page_result)
+
+    doc.close()
+
+    print(f"\n[OCR] 提取完成，共 {len(pages_data)} 页")
+
+    return {"pages": pages_data}
 
 
 def detect_language(text: str) -> str:
@@ -527,6 +871,252 @@ def calculate_adaptive_font_size(text: str, bbox: fitz.Rect,
     return min_size, 0.9
 
 
+# ==================== 两阶段字号分析（方案 E） ====================
+
+# Category 字号范围配置
+CATEGORY_FONTSIZE_CONFIG = {
+    'title':          {'default': 16, 'min': 10, 'max': 24},
+    'section-header': {'default': 13, 'min': 9,  'max': 18},
+    'text':           {'default': 10, 'min': 5,  'max': 14},
+    'list-item':      {'default': 10, 'min': 5,  'max': 14},
+    'caption':        {'default': 9,  'min': 5,  'max': 12},
+    'footnote':       {'default': 8,  'min': 4,  'max': 10},
+    'page-header':    {'default': 8,  'min': 4,  'max': 10},
+    'page-footer':    {'default': 8,  'min': 4,  'max': 10},
+}
+
+
+def estimate_fontsize_from_bbox(bbox_height: float, text: str, scale_factor: float) -> float:
+    """
+    根据 bbox 高度和文本估算原始字号。
+
+    Args:
+        bbox_height: bbox 的高度（PDF 坐标，已缩放）
+        text: 文本内容
+        scale_factor: 坐标缩放比例（PDF DPI / 图片 DPI）
+
+    Returns:
+        估算的字号（pt）
+    """
+    # 估算行数：根据换行符数量 + 1
+    line_count = text.count('\n') + 1
+
+    # 如果文本很长但没有换行符，可能是需要自动换行的
+    # 这种情况下行数估算不准确，返回 0 表示无法准确估算
+    text_length = len(text.replace('\n', '').replace(' ', ''))
+    if line_count == 1 and text_length > 50:
+        return 0  # 无法准确估算，需要用默认值
+
+    # 字号估算：bbox 高度 / 行数 / 行高系数
+    # 行高系数通常在 1.2-1.5 之间，这里使用 1.3
+    line_height_ratio = 1.3
+    estimated_fontsize = bbox_height / line_count / line_height_ratio
+
+    return estimated_fontsize
+
+
+def analyze_category_fontsizes(pages_data: list, scale_factor: float) -> dict:
+    """
+    第一阶段：扫描所有元素，分析各 category 的典型字号。
+
+    Args:
+        pages_data: 页面数据列表
+        scale_factor: 坐标缩放比例
+
+    Returns:
+        各 category 的推荐字号字典 {category: fontsize}
+    """
+    # 收集各 category 的字号样本
+    category_samples = {}
+
+    for page_data in pages_data:
+        elements = page_data.get('elements', [])
+
+        for element in elements:
+            bbox = element.get('bbox')
+            text = element.get('text', '')
+            category = element.get('category', 'text').lower()
+
+            # 跳过特殊类型
+            if category in ['table', 'formula', 'picture']:
+                continue
+
+            if not bbox or not text:
+                continue
+
+            # 计算 bbox 高度（转换到 PDF 坐标）
+            x0, y0, x1, y1 = bbox
+            bbox_height = (y1 - y0) * scale_factor
+
+            # 估算字号
+            estimated_size = estimate_fontsize_from_bbox(bbox_height, text, scale_factor)
+
+            if estimated_size > 0:
+                if category not in category_samples:
+                    category_samples[category] = []
+                category_samples[category].append({
+                    'estimated_size': estimated_size,
+                    'bbox_height': bbox_height,
+                    'text_length': len(text),
+                    'line_count': text.count('\n') + 1,
+                })
+
+    # 计算各 category 的典型字号
+    category_fontsizes = {}
+
+    for category, samples in category_samples.items():
+        if not samples:
+            continue
+
+        # 获取配置的字号范围
+        config = CATEGORY_FONTSIZE_CONFIG.get(category, {
+            'default': 10, 'min': 5, 'max': 14
+        })
+
+        # 策略：使用中位数（更稳定，不受极端值影响）
+        # 只考虑单行或少行的样本（估算更准确）
+        reliable_samples = [s for s in samples if s['line_count'] <= 3]
+
+        if reliable_samples:
+            sizes = [s['estimated_size'] for s in reliable_samples]
+            sizes.sort()
+            median_size = sizes[len(sizes) // 2]
+
+            # 限制在配置范围内
+            final_size = max(config['min'], min(config['max'], median_size))
+        else:
+            # 没有可靠样本，使用默认值
+            final_size = config['default']
+
+        category_fontsizes[category] = round(final_size, 1)
+
+    # 确保层次关系：title > section-header > text > caption/footnote
+    # 如果分析结果违反层次关系，进行调整
+    category_fontsizes = enforce_fontsize_hierarchy(category_fontsizes)
+
+    return category_fontsizes
+
+
+def enforce_fontsize_hierarchy(fontsizes: dict) -> dict:
+    """
+    确保字号满足层次关系：title > section-header > text > caption/footnote
+
+    Args:
+        fontsizes: 各 category 的字号字典
+
+    Returns:
+        调整后的字号字典
+    """
+    result = fontsizes.copy()
+
+    # 定义层次关系（从大到小）
+    hierarchy = [
+        ('title', 16),
+        ('section-header', 13),
+        ('text', 10),
+        ('list-item', 10),
+        ('caption', 9),
+        ('footnote', 8),
+        ('page-header', 8),
+        ('page-footer', 8),
+    ]
+
+    # 获取基准字号（text 的字号，或默认 10）
+    base_size = result.get('text', 10)
+
+    # 从上往下调整：确保上层 >= 下层
+    prev_size = 999
+    for category, default_size in hierarchy:
+        if category in result:
+            current_size = result[category]
+            # 确保当前 <= 上一层
+            if current_size > prev_size:
+                current_size = prev_size
+            result[category] = current_size
+            prev_size = current_size
+        else:
+            # 如果没有该 category，使用默认值（但不超过上一层）
+            result[category] = min(default_size, prev_size)
+            prev_size = result[category]
+
+    # 从下往上调整：确保上层 > 下层（至少差 1pt）
+    prev_size = 0
+    for category, default_size in reversed(hierarchy):
+        if category in result:
+            current_size = result[category]
+            # 确保当前 > 下一层（至少差 0.5pt）
+            if current_size <= prev_size:
+                current_size = prev_size + 0.5
+            result[category] = round(current_size, 1)
+            prev_size = current_size
+
+    return result
+
+
+def get_fontsize_for_element(category: str, bbox: fitz.Rect, text: str,
+                              category_fontsizes: dict) -> tuple:
+    """
+    获取元素的字号（结合分析结果和自适应缩放）。
+
+    Args:
+        category: 元素类别
+        bbox: 元素边界框
+        text: 元素文本
+        category_fontsizes: 第一阶段分析得到的各 category 字号
+
+    Returns:
+        (fontsize, line_spacing) 元组
+    """
+    # 获取该 category 的推荐字号
+    config = CATEGORY_FONTSIZE_CONFIG.get(category, {'default': 10, 'min': 5, 'max': 14})
+    recommended_size = category_fontsizes.get(category, config['default'])
+    min_size = config['min']
+
+    # 计算文本是否能放下
+    text_only = re.sub(r'\$.*?\$', 'FORMULA', text)
+
+    # 尝试使用推荐字号
+    _, height, _ = calculate_text_dimensions(text_only, "helv", recommended_size,
+                                              bbox.width - 4, 1.2)
+
+    usable_height = bbox.height - 4  # 减去边距
+
+    if height <= usable_height:
+        # 推荐字号能放下
+        return recommended_size, 1.2
+
+    # 推荐字号放不下，需要缩小
+    # 使用二分查找找到合适的字号
+    low, high = min_size, recommended_size
+    best_size = min_size
+
+    while low <= high:
+        mid = (low + high) / 2
+        _, height, _ = calculate_text_dimensions(text_only, "helv", mid,
+                                                  bbox.width - 4, 1.2)
+        if height <= usable_height:
+            best_size = mid
+            low = mid + 0.5
+        else:
+            high = mid - 0.5
+
+    # 如果最小字号还是放不下，尝试减小行距
+    _, height, _ = calculate_text_dimensions(text_only, "helv", best_size,
+                                              bbox.width - 4, 1.2)
+
+    if height <= usable_height:
+        return round(best_size, 1), 1.2
+
+    # 尝试减小行距
+    for line_spacing in [1.1, 1.0, 0.95, 0.9]:
+        _, height, _ = calculate_text_dimensions(text_only, "helv", min_size,
+                                                  bbox.width - 4, line_spacing)
+        if height <= usable_height:
+            return min_size, line_spacing
+
+    return min_size, 0.9
+
+
 def render_mixed_content(page: fitz.Page, text: str, bbox: fitz.Rect,
                           fontsize: int, fontname: str = "helv", bg_color_rgb: tuple = (255, 255, 255),
                           line_spacing: float = None):
@@ -902,7 +1492,7 @@ def render_table(page, bbox, table_html, bg_color_rgb=(255, 255, 255)):
     print(f"    [OK] 表格渲染完成 (尺寸: {actual_width:.1f}x{actual_height:.1f}pt, 耗时: {elapsed_time:.2f}s)")
 
 
-def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None, image_dpi: int = 200, draw_bbox: bool = False,
+def process_pdf_with_json(pdf_path: str, json_path: str = None, output_path: str = None, image_dpi: int = 200, draw_bbox: bool = False,
                           translate: bool = False, src_lang: str = "en", tgt_lang: str = "zh",
                           model_type: str = None, app_id: str = None):
     """
@@ -910,7 +1500,7 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
 
     Args:
         pdf_path: Input PDF file path
-        json_path: OCR JSON file path
+        json_path: OCR JSON file path (optional, if not provided, will call OCR API)
         output_path: Output PDF path (optional)
         image_dpi: DPI of the image used for OCR (default: 200)
         draw_bbox: Whether to draw bbox borders for debugging (default: False)
@@ -929,20 +1519,26 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
 
     # Validate input files
     pdf_file = Path(pdf_path)
-    json_file = Path(json_path)
 
     if not pdf_file.exists():
         print(f"[ERROR] PDF文件不存在: {pdf_path}")
         return
 
-    if not json_file.exists():
-        print(f"[ERROR] JSON文件不存在: {json_path}")
-        return
+    # Load OCR data from JSON file or call OCR API
+    if json_path is not None:
+        json_file = Path(json_path)
+        if not json_file.exists():
+            print(f"[ERROR] JSON文件不存在: {json_path}")
+            return
 
-    # Load JSON
-    print(f"\n[1/5] 加载JSON文件: {json_path}")
-    with open(json_path, 'r', encoding='utf-8') as f:
-        ocr_data = json.load(f)
+        # Load JSON
+        print(f"\n[1/5] 加载JSON文件: {json_path}")
+        with open(json_path, 'r', encoding='utf-8') as f:
+            ocr_data = json.load(f)
+    else:
+        # Call OCR API to extract PDF content
+        print(f"\n[1/5] 调用OCR API提取PDF内容...")
+        ocr_data = extract_pdf_with_ocr(pdf_path, image_dpi=image_dpi)
 
     # Open PDF
     print(f"[2/5] 打开PDF文件: {pdf_path}")
@@ -966,13 +1562,23 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
         print(f"  支持的格式2: {{'page_index': 0, 'elements': [...]}}")
         return
 
-    print(f"[3/5] 处理 {len(pages_data)} 个页面...")
+    print(f"[3/6] 处理 {len(pages_data)} 个页面...")
     print(f"  坐标转换: 图片DPI {image_dpi} -> PDF DPI 72")
 
     # Calculate scaling factor
     pdf_dpi = 72.0
     scale_factor = pdf_dpi / image_dpi
     print(f"  缩放比例: {scale_factor:.4f}")
+
+    # ========== 第一阶段：分析各 category 的典型字号 ==========
+    print(f"\n[4/6] 分析字号...")
+    category_fontsizes = analyze_category_fontsizes(pages_data, scale_factor)
+    print(f"  分析完成，各类别推荐字号:")
+    for cat, size in sorted(category_fontsizes.items(), key=lambda x: -x[1]):
+        print(f"    {cat}: {size}pt")
+
+    # ========== 第二阶段：渲染 ==========
+    print(f"\n[5/6] 渲染页面...")
 
     # Process each page
     total_elements = 0
@@ -1112,16 +1718,21 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
                         print(f"      原文: {text[:80]}{'...' if len(text) > 80 else ''}")
                         print(f"      译文: {translated_text[:80]}{'...' if len(translated_text) > 80 else ''}")
 
-                # Calculate adaptive font size and line spacing based on the FINAL text (after translation)
-                # Strategy: First reduce line spacing, then font size if needed
-                text_only = re.sub(r'\$.*?\$', 'FORMULA', modified_text)
-                fontsize, line_spacing = calculate_adaptive_font_size(text_only, rect, default_size=12, min_size=3)
+                # 使用两阶段分析得到的字号（方案 E）
+                fontsize, line_spacing = get_fontsize_for_element(
+                    category, rect, modified_text, category_fontsizes
+                )
 
-                # Print font size for each text element
+                # Print font size for each text element (handle encoding for Windows console)
                 display_text = text[:40].replace('\n', ' ')
                 if len(text) > 40:
                     display_text += "..."
-                print(f"    [{category}] 元素 {elem_idx + 1}: {fontsize}pt | {display_text}")
+                # Encode then decode to handle characters that can't be displayed
+                try:
+                    print(f"    [{category}] elem {elem_idx + 1}: {fontsize}pt | {display_text}")
+                except UnicodeEncodeError:
+                    safe_text = display_text.encode('ascii', errors='replace').decode('ascii')
+                    print(f"    [{category}] elem {elem_idx + 1}: {fontsize}pt | {safe_text}")
 
                 # Render mixed content with auto color adaptation and calculated line spacing
                 render_mixed_content(page, modified_text, rect, fontsize, bg_color_rgb=bg_color, line_spacing=line_spacing)
@@ -1137,12 +1748,12 @@ def process_pdf_with_json(pdf_path: str, json_path: str, output_path: str = None
                 print(f"    处理进度: {elem_idx + 1}/{len(elements)}")
 
     # Save output
-    print(f"\n[4/5] 保存输出PDF: {output_path}")
+    print(f"\n[6/6] 保存输出PDF: {output_path}")
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     doc.save(output_path)
     doc.close()
 
-    print(f"[5/5] 完成!")
+    print(f"完成!")
     print("\n" + "=" * 80)
     print("处理统计:")
     print(f"  - 总页数: {len(pages_data)}")
@@ -1156,12 +1767,21 @@ def main():
     Main entry point with command-line argument parsing.
     """
     parser = argparse.ArgumentParser(
-        description='PDF文本覆盖工具 - 将JSON中的字母替换为c并渲染回PDF',
+        description='PDF文本覆盖工具 - 使用OCR提取PDF内容并渲染回PDF',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python demo_text_overlay.py input.pdf ocr_result.json
-  python demo_text_overlay.py input.pdf ocr_result.json -o custom_output.pdf
+  # 直接处理PDF（自动调用OCR API）
+  python demo_text_overlay.py input.pdf
+
+  # 使用已有的JSON文件
+  python demo_text_overlay.py input.pdf -j ocr_result.json
+
+  # 指定输出路径
+  python demo_text_overlay.py input.pdf -o custom_output.pdf
+
+  # 启用翻译
+  python demo_text_overlay.py input.pdf --translate --src-lang en --tgt-lang zh
 
 JSON格式:
   {
@@ -1182,7 +1802,8 @@ JSON格式:
     )
 
     parser.add_argument('pdf_path', type=str, help='输入PDF文件路径')
-    parser.add_argument('json_path', type=str, help='OCR JSON文件路径')
+    parser.add_argument('-j', '--json', type=str, default=None, dest='json_path',
+                       help='OCR JSON文件路径（可选，不提供则自动调用OCR API）')
     parser.add_argument('-o', '--output', type=str, default=None,
                        help='输出PDF文件路径 (默认: output/{input}_overlay.pdf)')
     parser.add_argument('--dpi', type=int, default=200,
@@ -1193,14 +1814,14 @@ JSON格式:
     # Translation options
     parser.add_argument('--translate', action='store_true',
                        help='启用翻译功能')
-    parser.add_argument('--src-lang', type=str, default='zh',
-                       help='源语言 (默认: en)')
-    parser.add_argument('--tgt-lang', type=str, default='en',
-                       help='目标语言 (默认: zh)')
+    parser.add_argument('--src-lang', type=str, default='en',
+                       help='源语言 (默认: zh)')
+    parser.add_argument('--tgt-lang', type=str, default='zh',
+                       help='目标语言 (默认: en)')
     parser.add_argument('--model', type=str, default=None,
                        help='翻译模型 (deepseek_v3, volcengine)')
     parser.add_argument('--app-id', type=str, default=None,
-                       help='翻译API的应用ID')
+                       help='OCR/翻译API的应用ID (默认: test)')
 
     args = parser.parse_args()
 
