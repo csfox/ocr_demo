@@ -646,6 +646,47 @@ def parse_mixed_content(text: str) -> list:
     return segments
 
 
+# LaTeX 简写命令 → mathtext 兼容命令的映射表
+LATEX_SHORTHAND_MAP = {
+    # 比较符号
+    r'\le': r'\leq',           # ≤
+    r'\ge': r'\geq',           # ≥
+    r'\ne': r'\neq',           # ≠
+    # 箭头
+    r'\to': r'\rightarrow',    # →
+    r'\gets': r'\leftarrow',   # ←
+    r'\iff': r'\Leftrightarrow',  # ⟺
+    # 集合符号
+    r'\emptyset': r'\varnothing',  # ∅
+    # 希腊字母变体
+    r'\epsilon': r'\varepsilon',   # ε (某些情况下)
+    # 其他常见简写
+    r'\land': r'\wedge',       # ∧
+    r'\lor': r'\vee',          # ∨
+    r'\lnot': r'\neg',         # ¬
+    r'\owns': r'\ni',          # ∋
+    r'\gets': r'\leftarrow',   # ←
+}
+
+
+def normalize_latex_for_mathtext(latex_formula: str) -> str:
+    """
+    将 LaTeX 简写命令转换为 mathtext 兼容的完整形式。
+
+    Args:
+        latex_formula: 原始 LaTeX 公式
+
+    Returns:
+        转换后的公式
+    """
+    result = latex_formula
+    for shorthand, full_form in LATEX_SHORTHAND_MAP.items():
+        # 使用字符串替换（注意：需要处理命令边界）
+        # 简单替换即可，因为这些命令后面通常跟空格、{、_、^ 或其他非字母字符
+        result = result.replace(shorthand, full_form)
+    return result
+
+
 def render_latex_to_bytes_with_size(latex_formula: str, fontsize: int = 20, dpi: int = 300) -> tuple:
     """
     Render a LaTeX formula to PNG image bytes and return size info.
@@ -659,6 +700,9 @@ def render_latex_to_bytes_with_size(latex_formula: str, fontsize: int = 20, dpi:
     Returns:
         Tuple of (image_bytes, width_pixels, height_pixels)
     """
+    # 预处理：将 LaTeX 简写命令转换为 mathtext 兼容形式
+    latex_formula = normalize_latex_for_mathtext(latex_formula)
+
     # Create figure with transparent background
     fig = plt.figure(figsize=(0.01, 0.01))
     fig.patch.set_alpha(0)
